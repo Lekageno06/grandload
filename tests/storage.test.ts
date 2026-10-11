@@ -1,15 +1,21 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { DEFAULT_PREFS, getPrefs, setPrefs } from '../src/core/storage';
+import { DEFAULT_PREFS, getPrefs, readStorage, setPrefs, writeStorage } from '../src/core/storage';
 
 type ChromeStorageMock = {
   storage: {
     local: {
-      get: (key: string | string[] | Record<string, unknown>, callback: (items: Record<string, unknown>) => void) => void;
+      get: (
+        key: string | string[] | Record<string, unknown>,
+        callback: (items: Record<string, unknown>) => void,
+      ) => void;
       set: (items: Record<string, unknown>, callback?: () => void) => void;
     };
     session: {
-      get: (key: string | string[] | Record<string, unknown>, callback: (items: Record<string, unknown>) => void) => void;
+      get: (
+        key: string | string[] | Record<string, unknown>,
+        callback: (items: Record<string, unknown>) => void,
+      ) => void;
       set: (items: Record<string, unknown>, callback?: () => void) => void;
     };
   };
@@ -22,7 +28,11 @@ describe('storage', () => {
       storage: {
         local: {
           get: (key, callback) => {
-            const keys = Array.isArray(key) ? key : typeof key === 'string' ? [key] : Object.keys(key);
+            const keys = Array.isArray(key)
+              ? key
+              : typeof key === 'string'
+                ? [key]
+                : Object.keys(key);
             const result: Record<string, unknown> = {};
 
             for (const item of keys) {
@@ -43,7 +53,11 @@ describe('storage', () => {
         },
         session: {
           get: (key, callback) => {
-            const keys = Array.isArray(key) ? key : typeof key === 'string' ? [key] : Object.keys(key);
+            const keys = Array.isArray(key)
+              ? key
+              : typeof key === 'string'
+                ? [key]
+                : Object.keys(key);
             const result: Record<string, unknown> = {};
 
             for (const item of keys) {
@@ -65,7 +79,10 @@ describe('storage', () => {
       },
     };
 
-    (globalThis as typeof globalThis & { chrome: ChromeStorageMock }).chrome = chromeMock;
+    Object.defineProperty(globalThis, 'chrome', {
+      configurable: true,
+      value: chromeMock,
+    });
   });
 
   it('returns the default prefs when the storage is empty', async () => {
@@ -80,6 +97,29 @@ describe('storage', () => {
     await expect(getPrefs()).resolves.toMatchObject({
       format: 'zip',
       concurrency: 3,
+    });
+  });
+
+  it('provides a message when Chrome omits the storage error detail', async () => {
+    const storageArea = {
+      get: (_key: string, callback: (items: Record<string, unknown>) => void) => callback({}),
+      set: (_items: Record<string, unknown>, callback?: () => void) => callback?.(),
+    };
+    Object.defineProperty(globalThis, 'chrome', {
+      configurable: true,
+      value: {
+        runtime: { lastError: {} },
+        storage: { local: storageArea, session: storageArea },
+      },
+    });
+
+    await expect(readStorage('local', 'missing')).rejects.toMatchObject({
+      code: 'STORAGE_READ_FAILED',
+      message: 'Échec de la lecture du stockage.',
+    });
+    await expect(writeStorage('local', 'key', 'value')).rejects.toMatchObject({
+      code: 'STORAGE_WRITE_FAILED',
+      message: 'Échec de l’écriture du stockage.',
     });
   });
 });

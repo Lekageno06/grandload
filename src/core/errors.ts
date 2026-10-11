@@ -19,7 +19,10 @@ export class GrandloadError extends Error {
   }
 }
 
-export function toGrandloadError(error: unknown, fallbackCode: GrandloadErrorCode = 'UNKNOWN'): GrandloadError {
+export function toGrandloadError(
+  error: unknown,
+  fallbackCode: GrandloadErrorCode = 'UNKNOWN',
+): GrandloadError {
   if (error instanceof GrandloadError) {
     return error;
   }

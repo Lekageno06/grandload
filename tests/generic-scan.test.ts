@@ -9,11 +9,12 @@ import { dedupeUrls, getBestSrcsetCandidate, normalizeUrl } from '../src/shared/
 describe('url-utils', () => {
   it('accepts only http and https URLs and strips fragments during dedupe', () => {
     expect(normalizeUrl('javascript:alert(1)', 'https://example.com')).toBeNull();
-    expect(normalizeUrl('/path/image.png#fragment', 'https://example.com/base/')).toBe('https://example.com/path/image.png');
-    expect(dedupeUrls(['https://example.com/a#1', 'https://example.com/a', 'https://example.com/b'])).toEqual([
-      'https://example.com/a',
-      'https://example.com/b',
-    ]);
+    expect(normalizeUrl('/path/image.png#fragment', 'https://example.com/base/')).toBe(
+      'https://example.com/path/image.png',
+    );
+    expect(
+      dedupeUrls(['https://example.com/a#1', 'https://example.com/a', 'https://example.com/b']),
+    ).toEqual(['https://example.com/a', 'https://example.com/b']);
   });
 
   it('keeps the highest resolution candidate in a srcset', () => {

@@ -105,7 +105,7 @@ export function getFileExtension(url: string): string {
   try {
     const pathname = new URL(url).pathname;
     const match = pathname.match(/\.([A-Za-z0-9]+)(?:$|[?#])/u);
-    return match ? match[1].toLowerCase() : '';
+    return match?.[1]?.toLowerCase() ?? '';
   } catch {
     return '';
   }
@@ -124,7 +124,11 @@ export function sanitizeFileName(fileName: string, fallback = 'download'): strin
 export function getBaseNameFromUrl(url: string): string {
   try {
     const parsed = new URL(url);
-    const pathname = globalThis.decodeURIComponent(parsed.pathname).split('/').filter(Boolean).pop();
+    const pathname = globalThis
+      .decodeURIComponent(parsed.pathname)
+      .split('/')
+      .filter(Boolean)
+      .pop();
     return pathname && pathname.trim() ? pathname : 'download';
   } catch {
     return 'download';

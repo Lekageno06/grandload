@@ -1,3 +1,5 @@
+import '../adapters';
+import '../modules';
 import { send } from '../core/messaging';
 import { listModules } from '../core/registry';
 import type { PageContext } from '../core/types';
@@ -29,7 +31,9 @@ async function getActiveTabId(): Promise<number | undefined> {
   }
 
   const tabs = await new Promise<chrome.tabs.Tab[]>((resolve) => {
-    chrome.tabs.query({ active: true, currentWindow: true }, (results: chrome.tabs.Tab[]) => resolve(results));
+    chrome.tabs.query({ active: true, currentWindow: true }, (results: chrome.tabs.Tab[]) =>
+      resolve(results),
+    );
   });
 
   const [activeTab] = tabs;

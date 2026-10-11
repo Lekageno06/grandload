@@ -6,7 +6,11 @@ export function getOriginPattern(url: string | URL): string {
 export async function hasHostAccess(url: string | URL): Promise<boolean> {
   const originPattern = getOriginPattern(url);
 
-  if (typeof chrome === 'undefined' || !chrome.permissions || typeof chrome.permissions.contains !== 'function') {
+  if (
+    typeof chrome === 'undefined' ||
+    !chrome.permissions ||
+    typeof chrome.permissions.contains !== 'function'
+  ) {
     return true;
   }
 
@@ -17,7 +21,11 @@ export async function hasHostAccess(url: string | URL): Promise<boolean> {
 export async function requestHostAccess(url: string | URL): Promise<boolean> {
   const originPattern = getOriginPattern(url);
 
-  if (typeof chrome === 'undefined' || !chrome.permissions || typeof chrome.permissions.request !== 'function') {
+  if (
+    typeof chrome === 'undefined' ||
+    !chrome.permissions ||
+    typeof chrome.permissions.request !== 'function'
+  ) {
     return true;
   }
 

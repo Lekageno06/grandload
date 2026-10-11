@@ -1,4 +1,7 @@
+import '../adapters';
+import '../modules';
 import { sanitizeFileName, getBaseNameFromUrl } from '../shared/url-utils';
+import { listAdapters } from '../core/registry';
 import type { PageContext } from '../core/types';
 
 type DownloadItem = {
@@ -77,10 +80,27 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
     chrome.tabs.get(payload.tabId, (tab) => {
       const url = tab?.url ?? '';
+      const foundAdapter =
+        listAdapters().find((adapter) => {
+          try {
+            return adapter.matches(new URL(url));
+          } catch {
+            return false;
+          }
+        }) ?? listAdapters().find((adapter) => adapter.id === 'generic');
+
+      const kind = (() => {
+        try {
+          return foundAdapter ? foundAdapter.classify(new URL(url)) : 'other';
+        } catch {
+          return 'other';
+        }
+      })();
+
       const context: PageContext = {
         url,
-        kind: 'other',
-        adapterId: 'generic',
+        kind,
+        adapterId: foundAdapter?.id ?? 'generic',
         tabId: payload.tabId,
       };
 
@@ -93,7 +113,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (type === 'JOB_CREATE') {
     const payload = message.payload as { kind: string; params?: { items?: DownloadItem[] } };
 
-    if (payload.kind === 'links' && Array.isArray(payload.params?.items) && payload.params.items.length > 0) {
+    if (
+      payload.kind === 'links' &&
+      Array.isArray(payload.params?.items) &&
+      payload.params.items.length > 0
+    ) {
       const items = payload.params.items as DownloadItem[];
       const firstUrl = items[0]?.url ?? 'https://example.invalid';
       const domain = (() => {

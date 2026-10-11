@@ -5,7 +5,16 @@ import { exportCsv, exportJson, exportTxt } from './exports';
 import { filterScanItems, getTypeCounts } from './filters';
 import type { ScanFilterState, ScanItem } from './types';
 
-const typeOptions = ['all', 'image', 'video', 'audio', 'document', 'archive', 'link', 'other'] as const;
+const typeOptions = [
+  'all',
+  'image',
+  'video',
+  'audio',
+  'document',
+  'archive',
+  'link',
+  'other',
+] as const;
 
 type ModuleState = {
   items: ScanItem[];
@@ -14,193 +23,229 @@ type ModuleState = {
 };
 
 function scanCurrentPageInTab(tabId: number): Promise<ScanItem[]> {
-  if (typeof chrome === 'undefined' || !chrome.scripting || typeof chrome.scripting.executeScript !== 'function') {
+  if (
+    typeof chrome === 'undefined' ||
+    !chrome.scripting ||
+    typeof chrome.scripting.executeScript !== 'function'
+  ) {
     return Promise.resolve([]);
   }
 
   return new Promise<ScanItem[]>((resolve) => {
-    chrome.scripting.executeScript({
-      target: { tabId },
-      func: () => {
-        const items: Array<{ id: string; url: string; type: string; ext: string; label: string; source: string }> = [];
-        const seen = new Set<string>();
+    chrome.scripting.executeScript(
+      {
+        target: { tabId },
+        func: () => {
+          const items: ScanItem[] = [];
+          const seen = new Set<string>();
 
-        const normalizeUrl = (rawUrl: string, baseUrl: string): string | null => {
-          const trimmed = rawUrl.trim();
-          if (!trimmed) {
-            return null;
-          }
-
-          try {
-            const resolved = new URL(trimmed, baseUrl);
-            if (!['http:', 'https:'].includes(resolved.protocol.toLowerCase())) {
+          const normalizeUrl = (rawUrl: string, baseUrl: string): string | null => {
+            const trimmed = rawUrl.trim();
+            if (!trimmed) {
               return null;
             }
-            return resolved.toString();
-          } catch {
-            return null;
-          }
-        };
 
-        const getExt = (url: string): string => {
-          try {
-            const pathname = new URL(url).pathname;
-            const match = pathname.match(/\.([A-Za-z0-9]+)(?:$|[?#])/u);
-            return match ? match[1].toLowerCase() : '';
-          } catch {
-            return '';
-          }
-        };
+            try {
+              const resolved = new URL(trimmed, baseUrl);
+              if (!['http:', 'https:'].includes(resolved.protocol.toLowerCase())) {
+                return null;
+              }
+              return resolved.toString();
+            } catch {
+              return null;
+            }
+          };
 
-        const bestSrcset = (srcset: string): string | null => {
-          const candidates = srcset.split(',');
-          let best: { url: string; score: number } | null = null;
+          const getExt = (url: string): string => {
+            try {
+              const pathname = new URL(url).pathname;
+              const match = pathname.match(/\.([A-Za-z0-9]+)(?:$|[?#])/u);
+              return match?.[1]?.toLowerCase() ?? '';
+            } catch {
+              return '';
+            }
+          };
 
-          for (const part of candidates) {
-            const trimmed = part.trim();
-            if (!trimmed) {
-              continue;
+          const bestSrcset = (srcset: string): string | null => {
+            const candidates = srcset.split(',');
+            let best: { url: string; score: number } | null = null;
+
+            for (const part of candidates) {
+              const trimmed = part.trim();
+              if (!trimmed) {
+                continue;
+              }
+
+              const tokens = trimmed.split(/\s+/u);
+              const url = tokens[0];
+              if (!url) {
+                continue;
+              }
+
+              const descriptor = tokens[1]?.toLowerCase() ?? '';
+              const match = descriptor.match(/^(\d+(?:\.\d+)?)x$/u);
+              const score = match ? Number(match[1]) : 0;
+
+              if (score > (best?.score ?? Number.NEGATIVE_INFINITY)) {
+                best = { url, score };
+              }
             }
 
-            const tokens = trimmed.split(/\s+/u);
-            const url = tokens[0];
-            if (!url) {
-              continue;
+            return best?.url ?? null;
+          };
+
+          const addCandidate = (
+            rawUrl: string,
+            source: ScanItem['source'],
+            label: string,
+          ): void => {
+            const normalized = normalizeUrl(rawUrl, location.href);
+            if (!normalized) {
+              return;
             }
 
-            const descriptor = tokens[1]?.toLowerCase() ?? '';
-            const match = descriptor.match(/^(\d+(?:\.\d+)?)x$/u);
-            const score = match ? Number(match[1]) : 0;
+            if (seen.has(normalized)) {
+              return;
+            }
 
-            if (score > (best?.score ?? Number.NEGATIVE_INFINITY)) {
-              best = { url, score };
+            seen.add(normalized);
+            const extension = getExt(normalized);
+            const lowerSource = source.toLowerCase();
+            let type: ScanItem['type'] = 'other';
+            if (
+              ['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'svg', 'bmp', 'ico'].includes(extension)
+            ) {
+              type = 'image';
+            } else if (['mp4', 'webm', 'mkv', 'mov', 'avi', 'm3u8', 'mpd'].includes(extension)) {
+              type = 'video';
+            } else if (['mp3', 'wav', 'ogg', 'm4a', 'flac', 'aac'].includes(extension)) {
+              type = 'audio';
+            } else if (
+              ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv'].includes(extension)
+            ) {
+              type = 'document';
+            } else if (['zip', 'rar', '7z', 'tar', 'gz'].includes(extension)) {
+              type = 'archive';
+            } else if (lowerSource === 'a' || lowerSource === 'link' || lowerSource === 'iframe') {
+              type = 'link';
+            } else if (
+              lowerSource === 'img' ||
+              lowerSource === 'picture' ||
+              lowerSource === 'meta'
+            ) {
+              type = 'image';
+            } else if (lowerSource === 'video' || lowerSource === 'source') {
+              type = 'video';
+            }
+
+            items.push({
+              id: normalized,
+              url: normalized,
+              type,
+              ext: extension,
+              label: label || normalized.split('/').pop() || 'resource',
+              source,
+            });
+          };
+
+          const anchors = Array.from(document.querySelectorAll('a[href]'));
+          for (const anchor of anchors) {
+            const href = anchor.getAttribute('href');
+            if (href) {
+              addCandidate(href, 'a', anchor.textContent?.trim() || href);
             }
           }
 
-          return best?.url ?? null;
-        };
+          for (const image of Array.from(
+            document.querySelectorAll(
+              'img[src], img[data-src], img[data-original], img[data-lazy-src]',
+            ),
+          )) {
+            const candidates = [
+              image.getAttribute('src'),
+              image.getAttribute('data-src'),
+              image.getAttribute('data-original'),
+              image.getAttribute('data-lazy-src'),
+              image.getAttribute('srcset') ? bestSrcset(image.getAttribute('srcset') ?? '') : null,
+            ];
 
-        const addCandidate = (rawUrl: string, source: string, label: string): void => {
-          const normalized = normalizeUrl(rawUrl, location.href);
-          if (!normalized) {
-            return;
+            for (const candidate of candidates) {
+              if (candidate) {
+                addCandidate(candidate, 'img', image.getAttribute('alt') || candidate);
+              }
+            }
           }
 
-          if (seen.has(normalized)) {
-            return;
-          }
-
-          seen.add(normalized);
-          const extension = getExt(normalized);
-          const lowerSource = source.toLowerCase();
-          let type = 'other';
-          if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'svg', 'bmp', 'ico'].includes(extension)) {
-            type = 'image';
-          } else if (['mp4', 'webm', 'mkv', 'mov', 'avi', 'm3u8', 'mpd'].includes(extension)) {
-            type = 'video';
-          } else if (['mp3', 'wav', 'ogg', 'm4a', 'flac', 'aac'].includes(extension)) {
-            type = 'audio';
-          } else if (['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv'].includes(extension)) {
-            type = 'document';
-          } else if (['zip', 'rar', '7z', 'tar', 'gz'].includes(extension)) {
-            type = 'archive';
-          } else if (lowerSource === 'a' || lowerSource === 'link' || lowerSource === 'iframe') {
-            type = 'link';
-          } else if (lowerSource === 'img' || lowerSource === 'picture' || lowerSource === 'meta') {
-            type = 'image';
-          } else if (lowerSource === 'video' || lowerSource === 'source') {
-            type = 'video';
-          }
-
-          items.push({
-            id: normalized,
-            url: normalized,
-            type,
-            ext: extension,
-            label: label || normalized.split('/').pop() || 'resource',
-            source,
-          });
-        };
-
-        const anchors = Array.from(document.querySelectorAll('a[href]'));
-        for (const anchor of anchors) {
-          const href = anchor.getAttribute('href');
-          if (href) {
-            addCandidate(href, 'a', anchor.textContent?.trim() || href);
-          }
-        }
-
-        for (const image of Array.from(document.querySelectorAll('img[src], img[data-src], img[data-original], img[data-lazy-src]'))) {
-          const candidates = [
-            image.getAttribute('src'),
-            image.getAttribute('data-src'),
-            image.getAttribute('data-original'),
-            image.getAttribute('data-lazy-src'),
-            image.getAttribute('srcset') ? bestSrcset(image.getAttribute('srcset') ?? '') : null,
-          ];
-
-          for (const candidate of candidates) {
+          for (const source of Array.from(
+            document.querySelectorAll('source[src], source[data-src], picture source[srcset]'),
+          )) {
+            const rawValue = source.getAttribute('srcset') ?? source.getAttribute('src') ?? '';
+            const candidate = rawValue.includes(',') ? bestSrcset(rawValue) : rawValue;
             if (candidate) {
-              addCandidate(candidate, 'img', image.getAttribute('alt') || candidate);
+              addCandidate(candidate, 'source', candidate);
             }
           }
-        }
 
-        for (const source of Array.from(document.querySelectorAll('source[src], source[data-src], picture source[srcset]'))) {
-          const rawValue = source.getAttribute('srcset') ?? source.getAttribute('src') ?? '';
-          const candidate = rawValue.includes(',') ? bestSrcset(rawValue) : rawValue;
-          if (candidate) {
-            addCandidate(candidate, 'source', candidate);
-          }
-        }
-
-        for (const media of Array.from(document.querySelectorAll('video[src], audio[src], video source[src], audio source[src]'))) {
-          const src = media.getAttribute('src') ?? media.getAttribute('data-src') ?? '';
-          if (src) {
-            addCandidate(src, media.tagName.toLowerCase(), src);
-          }
-        }
-
-        for (const link of Array.from(document.querySelectorAll('link[href]'))) {
-          const href = link.getAttribute('href');
-          if (href) {
-            addCandidate(href, 'link', href);
-          }
-        }
-
-        for (const meta of Array.from(document.querySelectorAll('meta[property="og:image"], meta[property="og:video"], meta[name="twitter:image"]'))) {
-          const content = meta.getAttribute('content');
-          if (content) {
-            addCandidate(content, 'meta', content);
-          }
-        }
-
-        for (const iframe of Array.from(document.querySelectorAll('iframe[src]'))) {
-          const src = iframe.getAttribute('src');
-          if (src) {
-            addCandidate(src, 'iframe', src);
-          }
-        }
-
-        for (const node of Array.from(document.querySelectorAll('[style]'))) {
-          const styleText = node.getAttribute('style') ?? '';
-          const regex = /url\((['"]?)(.*?)\1\)/giu;
-          const matches = styleText.matchAll(regex);
-
-          for (const match of matches) {
-            const value = match[2];
-            if (value) {
-              addCandidate(value, 'style', value);
+          for (const media of Array.from(
+            document.querySelectorAll(
+              'video[src], audio[src], video source[src], audio source[src]',
+            ),
+          )) {
+            const src = media.getAttribute('src') ?? media.getAttribute('data-src') ?? '';
+            if (src) {
+              const tagName = media.tagName.toLowerCase();
+              const source: ScanItem['source'] =
+                tagName === 'video' ? 'video' : tagName === 'audio' ? 'audio' : 'source';
+              addCandidate(src, source, src);
             }
           }
-        }
 
-        return items;
+          for (const link of Array.from(document.querySelectorAll('link[href]'))) {
+            const href = link.getAttribute('href');
+            if (href) {
+              addCandidate(href, 'link', href);
+            }
+          }
+
+          for (const meta of Array.from(
+            document.querySelectorAll(
+              'meta[property="og:image"], meta[property="og:video"], meta[name="twitter:image"]',
+            ),
+          )) {
+            const content = meta.getAttribute('content');
+            if (content) {
+              addCandidate(content, 'meta', content);
+            }
+          }
+
+          for (const iframe of Array.from(document.querySelectorAll('iframe[src]'))) {
+            const src = iframe.getAttribute('src');
+            if (src) {
+              addCandidate(src, 'iframe', src);
+            }
+          }
+
+          for (const node of Array.from(document.querySelectorAll('[style]'))) {
+            const styleText = node.getAttribute('style') ?? '';
+            const regex = /url\((['"]?)(.*?)\1\)/giu;
+            const matches = styleText.matchAll(regex);
+
+            for (const match of matches) {
+              const value = match[2];
+              if (value) {
+                addCandidate(value, 'style', value);
+              }
+            }
+          }
+
+          return items;
+        },
       },
-    }, (injectionResults) => {
-      const result = injectionResults?.[0]?.result as Array<{ id: string; url: string; type: string; ext: string; label: string; source: string }> | undefined;
-      resolve(result ?? []);
-    });
+      (injectionResults) => {
+        const result = injectionResults?.[0]?.result as ScanItem[] | undefined;
+        resolve(result ?? []);
+      },
+    );
   });
 }
 
@@ -307,7 +352,16 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
   txtButton.textContent = 'TXT';
   txtButton.disabled = true;
 
-  for (const button of [selectAllButton, selectNoneButton, invertButton, downloadButton, copyButton, csvButton, jsonButton, txtButton]) {
+  for (const button of [
+    selectAllButton,
+    selectNoneButton,
+    invertButton,
+    downloadButton,
+    copyButton,
+    csvButton,
+    jsonButton,
+    txtButton,
+  ]) {
     actionRow.appendChild(button);
   }
 
@@ -474,7 +528,12 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
     api.setStatus?.(`${selected.length} URL(s) copiées.`);
   });
 
-  const buildExport = (content: string, extension: string, mimeType: string, fileName: string): void => {
+  const buildExport = (
+    content: string,
+    extension: string,
+    mimeType: string,
+    fileName: string,
+  ): void => {
     const blob = new Blob([content], { type: mimeType });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');

@@ -1,12 +1,5 @@
 import { toGrandloadError } from './errors';
-import type {
-  ArchiveMeta,
-  Job,
-  JobState,
-  PageContext,
-  PageRef,
-  SeriesInfo,
-} from './types';
+import type { ArchiveMeta, Job, JobState, PageContext, PageRef, SeriesInfo } from './types';
 
 export type MessageKind =
   | 'PAGE_CONTEXT'
@@ -56,10 +49,11 @@ export type MessageEnvelope<T extends MessageKind> = {
 };
 
 export type MessageResponse<T> =
-  | { ok: true; data: T }
-  | { ok: false; error: { code: string; message: string } };
+  { ok: true; data: T } | { ok: false; error: { code: string; message: string } };
 
-function isEnvelope(value: unknown): value is { type: MessageKind; payload: Record<string, unknown> } {
+function isEnvelope(
+  value: unknown,
+): value is { type: MessageKind; payload: Record<string, unknown> } {
   return (
     typeof value === 'object' &&
     value !== null &&
@@ -113,7 +107,11 @@ export async function send<T extends MessageKind>(
   type: T,
   payload: MessagePayloadMap[T],
 ): Promise<MessageResponse<MessageResultMap[T]>> {
-  if (typeof chrome === 'undefined' || !chrome.runtime || typeof chrome.runtime.sendMessage !== 'function') {
+  if (
+    typeof chrome === 'undefined' ||
+    !chrome.runtime ||
+    typeof chrome.runtime.sendMessage !== 'function'
+  ) {
     return {
       ok: false,
       error: {
@@ -138,21 +136,23 @@ export function onMessage<T extends MessageKind>(
     return;
   }
 
-  chrome.runtime.onMessage.addListener((message: unknown, _sender: unknown, sendResponse: (response: unknown) => void) => {
-    if (!isEnvelope(message) || message.type !== type) {
-      return false;
-    }
+  chrome.runtime.onMessage.addListener(
+    (message: unknown, _sender: unknown, sendResponse: (response: unknown) => void) => {
+      if (!isEnvelope(message) || message.type !== type) {
+        return false;
+      }
 
-    void Promise.resolve(handler(message.payload as MessagePayloadMap[T]))
-      .then((data: MessageResultMap[T]) => {
-        sendResponse({ ok: true, data });
-      })
-      .catch((error: unknown) => {
-        sendResponse(normalizeErrorResponse(error));
-      });
+      void Promise.resolve(handler(message.payload as MessagePayloadMap[T]))
+        .then((data: MessageResultMap[T]) => {
+          sendResponse({ ok: true, data });
+        })
+        .catch((error: unknown) => {
+          sendResponse(normalizeErrorResponse(error));
+        });
 
-    return true;
-  });
+      return true;
+    },
+  );
 }
 
 export const messageTypes: readonly MessageKind[] = [

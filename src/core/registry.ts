@@ -1,8 +1,4 @@
-import type {
-  GrandloadModule,
-  Packager,
-  SiteAdapter,
-} from './types';
+import type { GrandloadModule, Packager, SiteAdapter } from './types';
 
 const modules = new Map<string, GrandloadModule>();
 const adapters = new Map<string, SiteAdapter>();

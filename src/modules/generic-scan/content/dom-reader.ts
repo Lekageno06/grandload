@@ -1,5 +1,9 @@
 import { classifyResource } from '../classify';
-import { getBestSrcsetCandidate, getBaseNameFromUrl, normalizeUrl } from '../../../shared/url-utils';
+import {
+  getBestSrcsetCandidate,
+  getBaseNameFromUrl,
+  normalizeUrl,
+} from '../../../shared/url-utils';
 import type { ScanItem, ScanSource } from '../types';
 
 function addCandidate(
@@ -15,14 +19,14 @@ function addCandidate(
     return;
   }
 
-  const ext = normalized.split('?')[0].split('/').pop() ?? '';
-  const label = overrideLabel ?? getBaseNameFromUrl(normalized) ?? ext || 'resource';
+  const ext = (normalized.split('?')[0] ?? normalized).split('/').pop() ?? '';
+  const label = (overrideLabel ?? getBaseNameFromUrl(normalized) ?? ext) || 'resource';
 
   items.set(normalized, {
     id: normalized,
     url: normalized,
     type: classifyResource(normalized, source),
-    ext: ext.includes('.') ? ext.split('.').pop() ?? '' : '',
+    ext: ext.includes('.') ? (ext.split('.').pop() ?? '') : '',
     label,
     source,
   });
@@ -55,7 +59,9 @@ export function readPageAssets(doc: Document, pageUrl: string): ScanItem[] {
     addCandidate(items, href, 'a', pageUrl, anchor.textContent?.trim() || getBaseNameFromUrl(href));
   }
 
-  for (const img of Array.from(doc.querySelectorAll('img[src], img[data-src], img[data-original], img[data-lazy-src]'))) {
+  for (const img of Array.from(
+    doc.querySelectorAll('img[src], img[data-src], img[data-original], img[data-lazy-src]'),
+  )) {
     const candidates = [
       img.getAttribute('src'),
       img.getAttribute('data-src'),
@@ -66,12 +72,22 @@ export function readPageAssets(doc: Document, pageUrl: string): ScanItem[] {
 
     for (const candidate of candidates) {
       if (candidate) {
-        addCandidate(items, candidate, 'img', pageUrl, img.getAttribute('alt') || getBaseNameFromUrl(candidate));
+        addCandidate(
+          items,
+          candidate,
+          'img',
+          pageUrl,
+          img.getAttribute('alt') || getBaseNameFromUrl(candidate),
+        );
       }
     }
   }
 
-  for (const source of Array.from(doc.querySelectorAll('source[src], source[data-src], source[data-srcset], picture source[srcset]'))) {
+  for (const source of Array.from(
+    doc.querySelectorAll(
+      'source[src], source[data-src], source[data-srcset], picture source[srcset]',
+    ),
+  )) {
     const rawSrcset = source.getAttribute('srcset') ?? source.getAttribute('src') ?? '';
     const best = rawSrcset.includes(',') ? getBestSrcsetCandidate(rawSrcset) : rawSrcset;
 
@@ -80,21 +96,39 @@ export function readPageAssets(doc: Document, pageUrl: string): ScanItem[] {
     }
   }
 
-  for (const media of Array.from(doc.querySelectorAll('video[src], audio[src], video source[src], audio source[src]'))) {
+  for (const media of Array.from(
+    doc.querySelectorAll('video[src], audio[src], video source[src], audio source[src]'),
+  )) {
     const sourceUrl = media.getAttribute('src') ?? media.getAttribute('data-src') ?? '';
     if (sourceUrl) {
-      addCandidate(items, sourceUrl, media.tagName.toLowerCase() as ScanSource, pageUrl, getBaseNameFromUrl(sourceUrl));
+      addCandidate(
+        items,
+        sourceUrl,
+        media.tagName.toLowerCase() as ScanSource,
+        pageUrl,
+        getBaseNameFromUrl(sourceUrl),
+      );
     }
   }
 
   for (const link of Array.from(doc.querySelectorAll('link[href]'))) {
     const href = link.getAttribute('href');
     if (href) {
-      addCandidate(items, href, 'link', pageUrl, link.getAttribute('rel') || getBaseNameFromUrl(href));
+      addCandidate(
+        items,
+        href,
+        'link',
+        pageUrl,
+        link.getAttribute('rel') || getBaseNameFromUrl(href),
+      );
     }
   }
 
-  for (const meta of Array.from(doc.querySelectorAll('meta[property="og:image"], meta[property="og:video"], meta[name="twitter:image"]'))) {
+  for (const meta of Array.from(
+    doc.querySelectorAll(
+      'meta[property="og:image"], meta[property="og:video"], meta[name="twitter:image"]',
+    ),
+  )) {
     const content = meta.getAttribute('content');
     if (content) {
       addCandidate(items, content, 'meta', pageUrl, 'Meta media');

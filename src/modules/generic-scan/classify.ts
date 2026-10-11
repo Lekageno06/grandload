@@ -4,7 +4,17 @@ import type { ResourceType, ScanSource } from './types';
 const imageExtensions = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'svg', 'bmp', 'ico']);
 const videoExtensions = new Set(['mp4', 'webm', 'mkv', 'mov', 'avi', 'm3u8', 'mpd']);
 const audioExtensions = new Set(['mp3', 'wav', 'ogg', 'm4a', 'flac', 'aac']);
-const documentExtensions = new Set(['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv']);
+const documentExtensions = new Set([
+  'pdf',
+  'doc',
+  'docx',
+  'xls',
+  'xlsx',
+  'ppt',
+  'pptx',
+  'txt',
+  'csv',
+]);
 const archiveExtensions = new Set(['zip', 'rar', '7z', 'tar', 'gz']);
 
 export function classifyResource(url: string, source: ScanSource | string = 'other'): ResourceType {

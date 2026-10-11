@@ -14,41 +14,35 @@ describe('messaging', () => {
   beforeEach(() => {
     runtimeListener = undefined;
 
-    (globalThis as typeof globalThis & {
-      chrome: {
+    Object.defineProperty(globalThis, 'chrome', {
+      configurable: true,
+      value: {
         runtime: {
-          sendMessage: (message: unknown, callback: (response: unknown) => void) => void;
-          onMessage: {
-            addListener: (newListener: RuntimeListener) => void;
-          };
-        };
-      };
-    }).chrome = {
-      runtime: {
-        sendMessage: (message: unknown, callback: (response: unknown) => void) => {
-          const typed = message as { type: string; payload: Record<string, unknown> };
-          if (typed.type === 'PAGE_CONTEXT') {
-            callback({
-              ok: true,
-              data: {
-                url: 'https://example.com',
-                kind: 'other',
-                adapterId: 'generic',
-                tabId: Number(typed.payload.tabId ?? 0),
-              },
-            });
-            return;
-          }
+          sendMessage: (message: unknown, callback: (response: unknown) => void) => {
+            const typed = message as { type: string; payload: Record<string, unknown> };
+            if (typed.type === 'PAGE_CONTEXT') {
+              callback({
+                ok: true,
+                data: {
+                  url: 'https://example.com',
+                  kind: 'other',
+                  adapterId: 'generic',
+                  tabId: Number(typed.payload.tabId ?? 0),
+                },
+              });
+              return;
+            }
 
-          callback({ ok: true, data: { jobId: 'job-1' } });
-        },
-        onMessage: {
-          addListener: (newListener: RuntimeListener) => {
-            runtimeListener = newListener;
+            callback({ ok: true, data: { jobId: 'job-1' } });
+          },
+          onMessage: {
+            addListener: (newListener: RuntimeListener) => {
+              runtimeListener = newListener;
+            },
           },
         },
       },
-    };
+    });
   });
 
   it('sends a message and resolves the typed response', async () => {

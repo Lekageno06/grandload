@@ -33,7 +33,10 @@ export const DEFAULT_PREFS: Prefs = {
 };
 
 type StorageAreaLike = {
-  get: (key: string | string[] | Record<string, unknown>, callback: (items: Record<string, unknown>) => void) => void;
+  get: (
+    key: string | string[] | Record<string, unknown>,
+    callback: (items: Record<string, unknown>) => void,
+  ) => void;
   set: (items: Record<string, unknown>, callback?: () => void) => void;
 };
 
@@ -50,7 +53,10 @@ function getStorageArea(areaName: StorageAreaName): StorageAreaLike | undefined 
   return area as StorageAreaLike;
 }
 
-export async function readStorage<T>(areaName: StorageAreaName, key: string): Promise<T | undefined> {
+export async function readStorage<T>(
+  areaName: StorageAreaName,
+  key: string,
+): Promise<T | undefined> {
   const area = getStorageArea(areaName);
 
   if (!area) {
@@ -60,7 +66,12 @@ export async function readStorage<T>(areaName: StorageAreaName, key: string): Pr
   return await new Promise<T | undefined>((resolve, reject) => {
     area.get(key, (items: Record<string, unknown>) => {
       if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.lastError) {
-        reject(new GrandloadError('STORAGE_READ_FAILED', chrome.runtime.lastError.message));
+        reject(
+          new GrandloadError(
+            'STORAGE_READ_FAILED',
+            chrome.runtime.lastError.message ?? 'Échec de la lecture du stockage.',
+          ),
+        );
         return;
       }
 
@@ -70,7 +81,11 @@ export async function readStorage<T>(areaName: StorageAreaName, key: string): Pr
   });
 }
 
-export async function writeStorage<T>(areaName: StorageAreaName, key: string, value: T): Promise<void> {
+export async function writeStorage<T>(
+  areaName: StorageAreaName,
+  key: string,
+  value: T,
+): Promise<void> {
   const area = getStorageArea(areaName);
 
   if (!area) {
@@ -80,7 +95,12 @@ export async function writeStorage<T>(areaName: StorageAreaName, key: string, va
   await new Promise<void>((resolve, reject) => {
     area.set({ [key]: value }, () => {
       if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.lastError) {
-        reject(new GrandloadError('STORAGE_WRITE_FAILED', chrome.runtime.lastError.message));
+        reject(
+          new GrandloadError(
+            'STORAGE_WRITE_FAILED',
+            chrome.runtime.lastError.message ?? 'Échec de l’écriture du stockage.',
+          ),
+        );
         return;
       }
 
@@ -126,7 +146,9 @@ export async function setJobs(jobs: Record<string, Job>): Promise<void> {
 }
 
 export async function getRuntimeState(): Promise<RuntimeState> {
-  return (await readStorage<RuntimeState>('session', STORAGE_KEYS.runtime)) ?? { offscreenOpen: false };
+  return (
+    (await readStorage<RuntimeState>('session', STORAGE_KEYS.runtime)) ?? { offscreenOpen: false }
+  );
 }
 
 export async function setRuntimeState(state: RuntimeState): Promise<void> {
