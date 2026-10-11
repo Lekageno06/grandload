@@ -34,7 +34,13 @@ async function bundle() {
 
   fs.cpSync(publicDir, outDir, { recursive: true });
 
-  const bootstrapSource = path.join('node_modules', 'bootstrap', 'dist', 'css', 'bootstrap.min.css');
+  const bootstrapSource = path.join(
+    'node_modules',
+    'bootstrap',
+    'dist',
+    'css',
+    'bootstrap.min.css',
+  );
   const bootstrapTarget = path.join(outDir, 'vendor', 'bootstrap.min.css');
   fs.mkdirSync(path.dirname(bootstrapTarget), { recursive: true });
   fs.copyFileSync(bootstrapSource, bootstrapTarget);
