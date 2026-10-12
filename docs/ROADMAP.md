@@ -22,9 +22,9 @@
 - [ ] Grille d'exclusion (RG-105, 109, 110)
 
 ## Jalon 4 — Archives
-- [ ] Offscreen document, `image-fetcher`, `archive-builder` (RG-305 à 307, 309)
-- [ ] Packagers `zip`, `cbz` (+ `comicinfo`), `folder` (RG-300 à 304)
-- [ ] Orchestrateur de jobs + persistance + téléchargement du blob
+- [x] Offscreen document, `image-fetcher`, `archive-builder` (RG-305 à 307, 309)
+- [x] Packagers `zip`, `cbz` (+ `comicinfo`), `folder` (RG-300 à 304)
+- [x] Orchestrateur de jobs + persistance + téléchargement du blob
 
 ## Jalon 5 — Module `series-download`
 - [ ] `readSeries`, tri numérique, plage/cases (RG-200 à 203)

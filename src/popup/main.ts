@@ -4,6 +4,19 @@ import { send } from '../core/messaging';
 import { listModules } from '../core/registry';
 import type { PageContext } from '../core/types';
 
+declare const __BUILD_DATE__: string;
+
+function renderBuildInfo(): void {
+  const versionNode = document.querySelector('#app-version');
+  const buildNode = document.querySelector('#build-info');
+  if (versionNode && typeof chrome !== 'undefined' && chrome.runtime?.getManifest) {
+    versionNode.textContent = `v${chrome.runtime.getManifest().version}`;
+  }
+  if (buildNode) {
+    buildNode.textContent = `Build ${new Date(__BUILD_DATE__).toLocaleString('fr-FR')}`;
+  }
+}
+
 function setStatus(message: string): void {
   const statusNode = document.querySelector('#status');
 
@@ -45,6 +58,7 @@ async function getActiveTabId(): Promise<number | undefined> {
 }
 
 async function initializePopup(): Promise<void> {
+  renderBuildInfo();
   const tabId = await getActiveTabId();
 
   if (typeof tabId !== 'number') {

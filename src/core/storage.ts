@@ -22,6 +22,7 @@ export const STORAGE_KEYS = {
   prefs: 'prefs',
   history: (seriesId: string): string => `history:${seriesId}`,
   exclusions: (adapterId: string): string => `exclusions:${adapterId}`,
+  requestedDownloadNames: 'requestedDownloadNames',
 } as const;
 
 export const DEFAULT_PREFS: Prefs = {
@@ -137,12 +138,81 @@ export async function setPrefs(updates: Partial<Prefs>): Promise<Prefs> {
   return next;
 }
 
-export async function getJobs(): Promise<Record<string, Job>> {
-  return (await readStorage<Record<string, Job>>('local', STORAGE_KEYS.jobs)) ?? {};
+let jobsQueue: Promise<void> = Promise.resolve();
+
+function serializeJobs<T>(operation: () => Promise<T>): Promise<T> {
+  const result = jobsQueue.then(operation, operation);
+  jobsQueue = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
 }
 
-export async function setJobs(jobs: Record<string, Job>): Promise<void> {
-  await writeStorage('local', STORAGE_KEYS.jobs, jobs);
+export function getJobs(): Promise<Record<string, Job>> {
+  return serializeJobs(
+    async () => (await readStorage<Record<string, Job>>('local', STORAGE_KEYS.jobs)) ?? {},
+  );
+}
+
+export function setJobs(jobs: Record<string, Job>): Promise<void> {
+  return serializeJobs(() => writeStorage('local', STORAGE_KEYS.jobs, jobs));
+}
+
+export function updateJobs(
+  update: (jobs: Record<string, Job>) => Record<string, Job>,
+): Promise<Record<string, Job>> {
+  return serializeJobs(async () => {
+    const jobs = (await readStorage<Record<string, Job>>('local', STORAGE_KEYS.jobs)) ?? {};
+    const updated = update(jobs);
+    await writeStorage('local', STORAGE_KEYS.jobs, updated);
+    return updated;
+  });
+}
+
+let requestedNamesQueue: Promise<void> = Promise.resolve();
+
+function serializeRequestedNames<T>(operation: () => Promise<T>): Promise<T> {
+  const result = requestedNamesQueue.then(operation, operation);
+  requestedNamesQueue = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
+}
+
+export function setRequestedDownloadName(blobUrl: string, filename: string): Promise<void> {
+  return serializeRequestedNames(async () => {
+    const names =
+      (await readStorage<Record<string, string>>('session', STORAGE_KEYS.requestedDownloadNames)) ??
+      {};
+    names[blobUrl] = filename;
+    await writeStorage('session', STORAGE_KEYS.requestedDownloadNames, names);
+  });
+}
+
+export function consumeRequestedDownloadName(blobUrl: string): Promise<string | undefined> {
+  return serializeRequestedNames(async () => {
+    const names =
+      (await readStorage<Record<string, string>>('session', STORAGE_KEYS.requestedDownloadNames)) ??
+      {};
+    const filename = names[blobUrl];
+    if (filename) {
+      delete names[blobUrl];
+      await writeStorage('session', STORAGE_KEYS.requestedDownloadNames, names);
+    }
+    return filename;
+  });
+}
+
+export function removeRequestedDownloadName(blobUrl: string): Promise<void> {
+  return serializeRequestedNames(async () => {
+    const names =
+      (await readStorage<Record<string, string>>('session', STORAGE_KEYS.requestedDownloadNames)) ??
+      {};
+    delete names[blobUrl];
+    await writeStorage('session', STORAGE_KEYS.requestedDownloadNames, names);
+  });
 }
 
 export async function getRuntimeState(): Promise<RuntimeState> {

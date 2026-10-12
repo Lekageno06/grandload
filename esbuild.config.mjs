@@ -5,6 +5,8 @@ import path from 'node:path';
 const outDir = 'dist';
 const publicDir = 'public';
 const watchMode = process.argv.includes('--watch');
+const buildTimestamp = new Date().toISOString();
+const buildDefines = { __BUILD_DATE__: JSON.stringify(buildTimestamp) };
 
 const entries = {
   'service-worker': 'src/background/service-worker.ts',
@@ -29,6 +31,7 @@ async function bundle() {
       minify: false,
       logLevel: 'info',
       legalComments: 'none',
+      define: buildDefines,
     });
   }
 
@@ -67,6 +70,7 @@ if (watchMode) {
     platform: 'browser',
     sourcemap: false,
     logLevel: 'info',
+    define: buildDefines,
     watch: true,
   });
 } else {

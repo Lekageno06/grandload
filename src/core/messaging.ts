@@ -1,5 +1,13 @@
 import { toGrandloadError } from './errors';
-import type { ArchiveMeta, Job, JobState, PageContext, PageRef, SeriesInfo } from './types';
+import type {
+  ArchiveBuildResult,
+  ArchiveMeta,
+  Job,
+  JobState,
+  PageContext,
+  PageRef,
+  SeriesInfo,
+} from './types';
 
 export type MessageKind =
   | 'PAGE_CONTEXT'
@@ -9,7 +17,9 @@ export type MessageKind =
   | 'JOB_CONTROL'
   | 'JOB_UPDATE'
   | 'BUILD_ARCHIVE'
-  | 'ARCHIVE_PROGRESS';
+  | 'ARCHIVE_PROGRESS'
+  | 'CANCEL_ARCHIVE'
+  | 'REVOKE_BLOBS';
 
 export interface MessagePayloadMap {
   PAGE_CONTEXT: { tabId: number };
@@ -22,14 +32,18 @@ export interface MessagePayloadMap {
     state: JobState;
     progress: { done: number; total: number };
     error?: { code: string; message: string };
+    warning?: { requested: string; actual: string };
   };
   BUILD_ARCHIVE: {
+    jobId: string;
     pages: PageRef[];
     packagerId: string;
     meta: ArchiveMeta;
     options: Record<string, unknown>;
   };
   ARCHIVE_PROGRESS: { jobId: string; done: number; total: number };
+  CANCEL_ARCHIVE: { jobId: string };
+  REVOKE_BLOBS: { blobUrls: string[] };
 }
 
 export interface MessageResultMap {
@@ -39,8 +53,10 @@ export interface MessageResultMap {
   JOB_CREATE: { jobId: string };
   JOB_CONTROL: { ok: boolean };
   JOB_UPDATE: void;
-  BUILD_ARCHIVE: { blobUrl: string; size: number };
+  BUILD_ARCHIVE: ArchiveBuildResult;
   ARCHIVE_PROGRESS: void;
+  CANCEL_ARCHIVE: { ok: boolean };
+  REVOKE_BLOBS: { ok: boolean };
 }
 
 export type MessageEnvelope<T extends MessageKind> = {
@@ -164,6 +180,8 @@ export const messageTypes: readonly MessageKind[] = [
   'JOB_UPDATE',
   'BUILD_ARCHIVE',
   'ARCHIVE_PROGRESS',
+  'CANCEL_ARCHIVE',
+  'REVOKE_BLOBS',
 ];
 
 export type JobMessage = Pick<Job, 'id' | 'kind' | 'state' | 'progress' | 'error'>;

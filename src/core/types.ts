@@ -45,7 +45,12 @@ export interface SiteAdapter {
 export interface Packager {
   id: string;
   extension: string;
-  pack: (entries: ArchiveEntry[], meta: ArchiveMeta) => Promise<Blob>;
+  pack: (entries: ArchiveEntry[], meta: ArchiveMeta) => Promise<Blob | ArchiveEntry[]>;
+}
+
+export interface PackagerMetadata {
+  id: string;
+  extension: string;
 }
 
 export interface PageRef {
@@ -79,6 +84,10 @@ export interface ArchiveMeta {
   sourceUrl: string;
 }
 
+export type ArchiveBuildResult =
+  | { kind: 'archive'; blobUrl: string; size: number }
+  | { kind: 'files'; files: Array<{ name: string; blobUrl: string; size: number }> };
+
 export interface Job {
   id: string;
   kind: 'chapter' | 'series' | 'links';
@@ -92,6 +101,10 @@ export interface Job {
   error?: {
     code: string;
     message: string;
+  };
+  warning?: {
+    requested: string;
+    actual: string;
   };
   createdAt: number;
 }

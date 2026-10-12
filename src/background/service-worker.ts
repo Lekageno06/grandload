@@ -3,6 +3,13 @@ import '../modules';
 import { sanitizeFileName, getBaseNameFromUrl } from '../shared/url-utils';
 import { listAdapters } from '../core/registry';
 import type { PageContext } from '../core/types';
+import { suggestRequestedDownloadName } from './download-filenames';
+import {
+  createChapterJob,
+  handleArchiveProgress,
+  handleJobControl,
+  recoverRunningJobs,
+} from './orchestrator';
 
 type DownloadItem = {
   id: string;
@@ -63,8 +70,17 @@ function scheduleDownloads(items: DownloadItem[], domain: string): void {
 
 console.info('Grandload service worker started.');
 
+chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
+  void suggestRequestedDownloadName(item, suggest);
+  return true;
+});
+
 chrome.runtime.onInstalled.addListener(() => {
   console.info('Grandload installed.');
+});
+
+void recoverRunningJobs().catch((error: unknown) => {
+  console.error('Impossible de reprendre les jobs interrompus.', error);
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -74,6 +90,29 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   const type = message.type;
+
+  if (
+    type === 'BUILD_ARCHIVE' ||
+    type === 'CANCEL_ARCHIVE' ||
+    type === 'REVOKE_BLOBS' ||
+    type === 'JOB_UPDATE'
+  ) {
+    return false;
+  }
+
+  if (type === 'ARCHIVE_PROGRESS') {
+    const payload = message.payload as { jobId: string; done: number; total: number };
+    void handleArchiveProgress(payload)
+      .then(() => sendResponse({ ok: true, data: undefined }))
+      .catch((error: unknown) => {
+        console.error('Impossible d’enregistrer la progression du chapitre.', error);
+        sendResponse({
+          ok: false,
+          error: { code: 'STORAGE_WRITE_FAILED', message: 'Progression non enregistrée.' },
+        });
+      });
+    return true;
+  }
 
   if (type === 'PAGE_CONTEXT') {
     const payload = message.payload as { tabId: number };
@@ -113,6 +152,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (type === 'JOB_CREATE') {
     const payload = message.payload as { kind: string; params?: { items?: DownloadItem[] } };
 
+    if (payload.kind === 'chapter' && payload.params) {
+      void createChapterJob(payload.params as Record<string, unknown>)
+        .then((data) => sendResponse({ ok: true, data }))
+        .catch((error: unknown) => {
+          const messageText =
+            error instanceof Error ? error.message : 'Création du chapitre impossible.';
+          sendResponse({ ok: false, error: { code: 'ADAPTER_STRUCTURE', message: messageText } });
+        });
+      return true;
+    }
+
     if (
       payload.kind === 'links' &&
       Array.isArray(payload.params?.items) &&
@@ -136,8 +186,20 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (type === 'JOB_CONTROL') {
-    sendResponse({ ok: true, data: { ok: true } });
-    return false;
+    const payload = message.payload as {
+      jobId: string;
+      action: 'pause' | 'resume' | 'cancel' | 'retry';
+    };
+    void handleJobControl(payload)
+      .then((data) => sendResponse({ ok: true, data }))
+      .catch((error: unknown) => {
+        console.error('Impossible de contrôler le job.', error);
+        sendResponse({
+          ok: false,
+          error: { code: 'UNKNOWN', message: 'Contrôle du job impossible.' },
+        });
+      });
+    return true;
   }
 
   sendResponse({ ok: true, data: { ready: true } });

@@ -1,6 +1,18 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { DEFAULT_PREFS, getPrefs, readStorage, setPrefs, writeStorage } from '../src/core/storage';
+import {
+  consumeRequestedDownloadName,
+  DEFAULT_PREFS,
+  getJobs,
+  getPrefs,
+  readStorage,
+  setJobs,
+  setPrefs,
+  setRequestedDownloadName,
+  updateJobs,
+  writeStorage,
+} from '../src/core/storage';
+import type { Job } from '../src/core/types';
 
 type ChromeStorageMock = {
   storage: {
@@ -121,5 +133,34 @@ describe('storage', () => {
       code: 'STORAGE_WRITE_FAILED',
       message: 'Échec de l’écriture du stockage.',
     });
+  });
+
+  it('persists and consumes requested filenames in session storage', async () => {
+    await setRequestedDownloadName('blob:chapter-image', 'Grandload/Test.cbz');
+
+    await expect(consumeRequestedDownloadName('blob:chapter-image')).resolves.toBe(
+      'Grandload/Test.cbz',
+    );
+    await expect(consumeRequestedDownloadName('blob:chapter-image')).resolves.toBeUndefined();
+  });
+
+  it('serializes concurrent job updates without dropping either update', async () => {
+    const makeJob = (id: string): Job => ({
+      id,
+      kind: 'chapter',
+      state: 'queued',
+      params: {},
+      progress: { done: 0, total: 1 },
+      createdAt: 1,
+    });
+    await setJobs({});
+
+    await Promise.all([
+      updateJobs((jobs) => ({ ...jobs, first: makeJob('first') })),
+      updateJobs((jobs) => ({ ...jobs, second: makeJob('second') })),
+    ]);
+
+    await expect(getJobs()).resolves.toHaveProperty('first');
+    await expect(getJobs()).resolves.toHaveProperty('second');
   });
 });
