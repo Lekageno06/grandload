@@ -1,6 +1,8 @@
 import { registerModule } from '../../core/registry';
+import { getAdapter } from '../../core/registry';
 import { send } from '../../core/messaging';
-import { getJobs, updateJobs } from '../../core/storage';
+import { getExclusions, getJobs, getPrefs, setExclusions, updateJobs } from '../../core/storage';
+import type { ExclusionMemory } from '../../core/storage';
 import type {
   ArchiveMeta,
   GrandloadModule,
@@ -9,8 +11,16 @@ import type {
   PageContext,
   PageRef,
 } from '../../core/types';
+import { processPageExclusions } from './exclusions';
 
-type SelectablePage = PageRef & { id: string; label: string; selected: boolean };
+type SelectablePage = PageRef & {
+  id: string;
+  label: string;
+  selected: boolean;
+  excludeReason?: string;
+  isAutoExcluded?: boolean;
+  isSuggestedExclusion?: boolean;
+};
 type ChapterDomData = { pages: SelectablePage[]; seriesTitle: string; chapterLabel: string };
 
 function collectChapterImages(tabId: number, adapterId: string): Promise<ChapterDomData> {
@@ -137,6 +147,8 @@ const chapterDownloadModule: GrandloadModule = {
       chapterData: { pages: [] as SelectablePage[], seriesTitle: 'Série', chapterLabel: '' },
       jobId: '',
       busy: false,
+      autoExcludeEnabled: true,
+      exclusionsMemory: undefined as ExclusionMemory | undefined,
     };
     const panel = document.createElement('div');
     panel.className = 'd-grid gap-3';
@@ -151,6 +163,31 @@ const chapterDownloadModule: GrandloadModule = {
     meta.className = 'small text-muted';
     meta.textContent = `Source : ${ctx.url}`;
     panel.appendChild(meta);
+
+    // Option pour activer/désactiver les pré-exclusions (RG-106)
+    const optionsRow = document.createElement('div');
+    optionsRow.className = 'd-flex align-items-center justify-content-between py-1 border-bottom';
+    const autoExcludeLabel = document.createElement('label');
+    autoExcludeLabel.className = 'form-check form-switch mb-0 small';
+    const autoExcludeInput = document.createElement('input');
+    autoExcludeInput.type = 'checkbox';
+    autoExcludeInput.className = 'form-check-input';
+    autoExcludeInput.checked = true;
+    autoExcludeInput.setAttribute('role', 'switch');
+    const autoExcludeText = document.createElement('span');
+    autoExcludeText.className = 'form-check-label ms-1';
+    autoExcludeText.textContent = 'Pré-exclusions automatiques';
+    autoExcludeLabel.append(autoExcludeInput, autoExcludeText);
+    optionsRow.appendChild(autoExcludeLabel);
+
+    // Bouton pour mémoriser les exclusions actuelles pour le site (RG-107)
+    const memorizeButton = document.createElement('button');
+    memorizeButton.type = 'button';
+    memorizeButton.className = 'btn btn-sm btn-outline-secondary';
+    memorizeButton.title = 'Mémoriser les exclusions (dernière planche ou motifs) pour ce site';
+    memorizeButton.textContent = 'Mémoriser';
+    optionsRow.appendChild(memorizeButton);
+    panel.appendChild(optionsRow);
 
     const actionRow = document.createElement('div');
     actionRow.className = 'd-flex flex-wrap gap-2';
@@ -231,6 +268,9 @@ const chapterDownloadModule: GrandloadModule = {
       for (const item of state.items) {
         const entry = document.createElement('label');
         entry.className = 'd-flex align-items-center gap-2 p-2 border rounded';
+        if (!item.selected) {
+          entry.classList.add('bg-light', 'text-muted');
+        }
 
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
@@ -238,14 +278,30 @@ const chapterDownloadModule: GrandloadModule = {
         checkbox.disabled = state.busy;
         checkbox.addEventListener('change', () => {
           item.selected = checkbox.checked;
+          if (item.selected) {
+            entry.classList.remove('bg-light', 'text-muted');
+          } else {
+            entry.classList.add('bg-light', 'text-muted');
+          }
+          updateActions();
         });
 
         const text = document.createElement('span');
-        text.className = 'small text-truncate';
+        text.className = 'small text-truncate flex-grow-1';
         text.textContent = `${item.label}`;
 
         entry.appendChild(checkbox);
         entry.appendChild(text);
+
+        // Badge d'exclusion (visible, réversible)
+        if (!item.selected && item.excludeReason) {
+          const badge = document.createElement('span');
+          badge.className = 'badge bg-warning text-dark text-wrap text-start ms-auto';
+          badge.style.fontSize = '0.7rem';
+          badge.textContent = item.excludeReason;
+          entry.appendChild(badge);
+        }
+
         grid.appendChild(entry);
       }
     };
@@ -575,11 +631,100 @@ const chapterDownloadModule: GrandloadModule = {
       }),
     );
 
-    void collectChapterImages(ctx.tabId, ctx.adapterId).then((chapterData) => {
-      state.chapterData = chapterData;
-      state.items = chapterData.pages;
+    const applyExclusionRules = (): void => {
+      const adapter = getAdapter(ctx.adapterId);
+      const rawPages: PageRef[] = state.chapterData.pages.map((p) => {
+        const ref: PageRef = {
+          index: p.index,
+          url: p.url,
+          ext: p.ext,
+        };
+        if (p.width !== undefined) ref.width = p.width;
+        if (p.height !== undefined) ref.height = p.height;
+        return ref;
+      });
+      const processed = processPageExclusions(
+        rawPages,
+        adapter,
+        state.autoExcludeEnabled,
+        state.exclusionsMemory,
+      );
+
+      state.items = state.chapterData.pages.map((orig, i) => {
+        const proc = processed[i];
+        const isExcluded = proc?.excluded ?? false;
+        const pageItem: SelectablePage = {
+          ...orig,
+          selected: !isExcluded,
+        };
+        if (proc?.reason !== undefined) {
+          pageItem.excludeReason = proc.reason;
+        }
+        if (proc?.isAutoExcluded !== undefined) {
+          pageItem.isAutoExcluded = proc.isAutoExcluded;
+        }
+        if (proc?.isSuggestedExclusion !== undefined) {
+          pageItem.isSuggestedExclusion = proc.isSuggestedExclusion;
+        }
+        return pageItem;
+      });
       renderGrid();
       updateActions();
+    };
+
+    autoExcludeInput.addEventListener('change', () => {
+      state.autoExcludeEnabled = autoExcludeInput.checked;
+      applyExclusionRules();
+    });
+
+    memorizeButton.addEventListener('click', () => {
+      void (async () => {
+        const currentExclusions = (await getExclusions(ctx.adapterId)) ?? {
+          lastPage: false,
+          urlPatterns: [],
+        };
+        const lastItem = state.items.at(-1);
+        const lastIsExcluded = Boolean(lastItem && !lastItem.selected);
+
+        // Détection des motifs d'URL exclus manuellement
+        const excludedItems = state.items.filter((item) => !item.selected);
+        const patterns = new Set<string>(currentExclusions.urlPatterns);
+        for (const item of excludedItems) {
+          // Si une image contient un segment reconnaissable (ex. 'banner', 'discord', etc.)
+          const match = item.url.match(/(?:banner|banniere|discord|credit|promo|recrutement|fin)/iu);
+          if (match) {
+            patterns.add(match[0].toLowerCase());
+          }
+        }
+
+        const updated = await setExclusions(ctx.adapterId, {
+          lastPage: lastIsExcluded || currentExclusions.lastPage,
+          urlPatterns: Array.from(patterns),
+        });
+        state.exclusionsMemory = updated;
+        memorizeButton.textContent = 'Mémorisé !';
+        memorizeButton.classList.remove('btn-outline-secondary');
+        memorizeButton.classList.add('btn-success');
+        setTimeout(() => {
+          memorizeButton.textContent = 'Mémoriser';
+          memorizeButton.classList.remove('btn-success');
+          memorizeButton.classList.add('btn-outline-secondary');
+        }, 1500);
+        api.setStatus?.('Exclusions mémorisées pour ce site.');
+      })();
+    });
+
+    void Promise.all([
+      getPrefs(),
+      getExclusions(ctx.adapterId),
+      collectChapterImages(ctx.tabId, ctx.adapterId),
+    ]).then(([prefs, memory, chapterData]) => {
+      state.autoExcludeEnabled = prefs.autoExclude ?? true;
+      autoExcludeInput.checked = state.autoExcludeEnabled;
+      state.exclusionsMemory = memory;
+      state.chapterData = chapterData;
+      formatSelect.value = prefs.format || 'cbz';
+      applyExclusionRules();
     });
   },
 };

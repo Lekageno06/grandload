@@ -99,17 +99,55 @@ describe('storage', () => {
 
   it('returns the default prefs when the storage is empty', async () => {
     await expect(getPrefs()).resolves.toEqual(DEFAULT_PREFS);
+    const prefs = await getPrefs();
+    expect(prefs.autoExclude).toBe(true);
+    expect(prefs.downloadFolder).toBe('Grandload');
+    expect(prefs.modulesEnabled).toEqual({});
   });
 
   it('merges and persists updated prefs', async () => {
-    const prefs = await setPrefs({ format: 'zip', concurrency: 3 });
+    const prefs = await setPrefs({
+      format: 'zip',
+      concurrency: 3,
+      autoExclude: false,
+      downloadFolder: 'MonManga',
+      modulesEnabled: { 'generic-scan': false },
+    });
 
     expect(prefs.format).toBe('zip');
     expect(prefs.concurrency).toBe(3);
+    expect(prefs.autoExclude).toBe(false);
+    expect(prefs.downloadFolder).toBe('MonManga');
+    expect(prefs.modulesEnabled['generic-scan']).toBe(false);
+
     await expect(getPrefs()).resolves.toMatchObject({
       format: 'zip',
       concurrency: 3,
+      autoExclude: false,
+      downloadFolder: 'MonManga',
+      modulesEnabled: { 'generic-scan': false },
     });
+  });
+
+  it('persists and retrieves exclusions memory per adapter (RG-107)', async () => {
+    const { getExclusions, setExclusions } = await import('../src/core/storage');
+
+    const defaultExcl = await getExclusions('mangas-origines');
+    expect(defaultExcl.lastPage).toBe(false);
+    expect(defaultExcl.urlPatterns).toEqual([]);
+
+    await setExclusions('mangas-origines', {
+      lastPage: true,
+      urlPatterns: ['discord_join', 'banner_promo'],
+    });
+
+    const updated = await getExclusions('mangas-origines');
+    expect(updated.lastPage).toBe(true);
+    expect(updated.urlPatterns).toEqual(['discord_join', 'banner_promo']);
+
+    // Autre adaptateur indépendant
+    const genericExcl = await getExclusions('generic');
+    expect(genericExcl.lastPage).toBe(false);
   });
 
   it('provides a message when Chrome omits the storage error detail', async () => {

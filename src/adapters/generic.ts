@@ -86,6 +86,18 @@ const genericAdapter: SiteAdapter = {
   id: 'generic',
   acquisition: 'live-dom',
   matches: (url) => /^https?:\/\//i.test(url.toString()),
+  excludePatterns: [
+    /(?:banner|banniere|discord|logo|avatar|credit|recrutement|promo)/iu,
+  ],
+  autoExclude: (page) => {
+    if (page.width !== undefined && page.width > 0 && page.width < 200) {
+      return 'Largeur < 200 px (trop petite)';
+    }
+    if (/(?:banner|banniere|discord|logo|avatar|credit|recrutement|promo)/iu.test(page.url)) {
+      return 'Motif de bannière/promo détecté';
+    }
+    return null;
+  },
   classify: (url) => {
     const pathname = url.pathname.toLowerCase();
     if (

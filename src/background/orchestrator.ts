@@ -23,8 +23,8 @@ function createJobId(): string {
   return `chapter-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-function isTerminal(state: JobState): boolean {
-  return state === 'done' || state === 'failed' || state === 'cancelled';
+export function isTerminal(state: JobState): boolean {
+  return state === 'done' || state === 'failed' || state === 'ignored' || state === 'cancelled';
 }
 
 function publishUpdate(job: Job): void {
@@ -41,14 +41,21 @@ function publishUpdate(job: Job): void {
 }
 
 async function saveJob(job: Job): Promise<void> {
-  const jobs = await updateJobs((currentJobs) => ({ ...currentJobs, [job.id]: job }));
+  const jobs = await updateJobs((currentJobs) => {
+    const current = currentJobs[job.id];
+    if (current && isTerminal(current.state)) return currentJobs;
+    return { ...currentJobs, [job.id]: job };
+  });
   const savedJob = jobs[job.id];
   if (savedJob) {
     publishUpdate(savedJob);
   }
 }
 
-async function updateJob(jobId: string, update: (job: Job) => Job): Promise<Job | undefined> {
+export async function updateJob(
+  jobId: string,
+  update: (job: Job) => Job,
+): Promise<Job | undefined> {
   let updatedJob: Job | undefined;
   const jobs = await updateJobs((currentJobs) => {
     const current = currentJobs[jobId];
@@ -64,6 +71,25 @@ async function updateJob(jobId: string, update: (job: Job) => Job): Promise<Job 
     publishUpdate(savedJob);
   }
   return updatedJob;
+}
+
+export async function requeueFailedJob(jobId: string): Promise<Job | undefined> {
+  let requeued: Job | undefined;
+  const jobs = await updateJobs((currentJobs) => {
+    const current = currentJobs[jobId];
+    if (!current || current.state !== 'failed') return currentJobs;
+    const next = {
+      ...current,
+      state: 'queued' as const,
+      progress: { done: 0, total: current.progress.total },
+    };
+    delete next.error;
+    requeued = next;
+    return { ...currentJobs, [jobId]: next };
+  });
+  if (requeued) publishUpdate(requeued);
+  else if (jobs[jobId]) publishUpdate(jobs[jobId]);
+  return requeued;
 }
 
 export function protectTerminalJobUpdate(current: Job, candidate: Job): Job {
@@ -318,7 +344,7 @@ async function revokeUrls(blobUrls: string[]): Promise<void> {
   }
 }
 
-async function runChapterJob(jobId: string): Promise<void> {
+export async function runChapterJob(jobId: string): Promise<void> {
   const jobs = await getJobs();
   const queued = jobs[jobId];
   if (!queued || queued.state !== 'queued') {
@@ -417,7 +443,7 @@ export async function createChapterJob(
 export async function handleArchiveProgress(
   payload: MessagePayloadMap['ARCHIVE_PROGRESS'],
 ): Promise<void> {
-  await updateJob(payload.jobId, (job) => {
+  const child = await updateJob(payload.jobId, (job) => {
     if (job.state !== 'running') {
       return job;
     }
@@ -426,6 +452,16 @@ export async function handleArchiveProgress(
       progress: { done: payload.done, total: payload.total },
     };
   });
+  const parentId = child?.params.parentId;
+  if (typeof parentId === 'string') {
+    await updateJob(parentId, (parent) => ({
+      ...parent,
+      params: {
+        ...parent.params,
+        currentChildProgress: { done: payload.done, total: payload.total },
+      },
+    }));
+  }
 }
 
 export async function cancelChapterJob(jobId: string): Promise<{ ok: boolean }> {
@@ -465,7 +501,8 @@ export async function handleJobControl(
 export async function recoverRunningJobs(): Promise<void> {
   const jobs = await getJobs();
   const interrupted = Object.values(jobs).filter(
-    (job) => job.kind === 'chapter' && job.state === 'running',
+    (job) =>
+      job.kind === 'chapter' && job.state === 'running' && typeof job.params.parentId !== 'string',
   );
   for (const job of interrupted) {
     if (isStaleRunningJob(job)) {

@@ -9,7 +9,24 @@ export interface Prefs {
   requestDelayMs: number;
   modulesEnabled: Record<string, boolean>;
   autoOpenDownloads: boolean;
+  /** Active/désactive les pré-exclusions automatiques (RG-106). */
+  autoExclude: boolean;
+  /** Sous-dossier de téléchargement personnalisé (par défaut Grandload) (RG-704). */
+  downloadFolder: string;
 }
+
+/** Exclusions mémorisées par site (RG-107). Stockées dans exclusions:<adapterId>. */
+export interface ExclusionMemory {
+  /** Exclure automatiquement la dernière planche. */
+  lastPage: boolean;
+  /** Motifs d'URL à exclure (sous-chaînes). */
+  urlPatterns: string[];
+}
+
+export const DEFAULT_EXCLUSION_MEMORY: ExclusionMemory = {
+  lastPage: false,
+  urlPatterns: [],
+};
 
 export interface RuntimeState {
   offscreenOpen: boolean;
@@ -23,6 +40,7 @@ export const STORAGE_KEYS = {
   history: (seriesId: string): string => `history:${seriesId}`,
   exclusions: (adapterId: string): string => `exclusions:${adapterId}`,
   requestedDownloadNames: 'requestedDownloadNames',
+  seriesTemporaryTabLock: 'seriesTemporaryTabLock',
 } as const;
 
 export const DEFAULT_PREFS: Prefs = {
@@ -31,6 +49,8 @@ export const DEFAULT_PREFS: Prefs = {
   requestDelayMs: 1500,
   modulesEnabled: {},
   autoOpenDownloads: false,
+  autoExclude: true,
+  downloadFolder: 'Grandload',
 };
 
 type StorageAreaLike = {
@@ -215,6 +235,32 @@ export function removeRequestedDownloadName(blobUrl: string): Promise<void> {
   });
 }
 
+export function acquireSeriesTemporaryTabLock(jobId: string): Promise<boolean> {
+  return serializeRequestedNames(async () => {
+    const lock = await readStorage<{ jobId: string }>(
+      'session',
+      STORAGE_KEYS.seriesTemporaryTabLock,
+    );
+    if (lock?.jobId && lock.jobId !== jobId) {
+      return false;
+    }
+    await writeStorage('session', STORAGE_KEYS.seriesTemporaryTabLock, { jobId });
+    return true;
+  });
+}
+
+export function releaseSeriesTemporaryTabLock(jobId: string): Promise<void> {
+  return serializeRequestedNames(async () => {
+    const lock = await readStorage<{ jobId: string }>(
+      'session',
+      STORAGE_KEYS.seriesTemporaryTabLock,
+    );
+    if (lock?.jobId === jobId) {
+      await writeStorage('session', STORAGE_KEYS.seriesTemporaryTabLock, { jobId: '' });
+    }
+  });
+}
+
 export async function getRuntimeState(): Promise<RuntimeState> {
   return (
     (await readStorage<RuntimeState>('session', STORAGE_KEYS.runtime)) ?? { offscreenOpen: false }
@@ -223,4 +269,30 @@ export async function getRuntimeState(): Promise<RuntimeState> {
 
 export async function setRuntimeState(state: RuntimeState): Promise<void> {
   await writeStorage('session', STORAGE_KEYS.runtime, state);
+}
+
+export async function getExclusions(adapterId: string): Promise<ExclusionMemory> {
+  const stored = await readStorage<Partial<ExclusionMemory>>(
+    'local',
+    STORAGE_KEYS.exclusions(adapterId),
+  );
+  return {
+    ...DEFAULT_EXCLUSION_MEMORY,
+    ...stored,
+    urlPatterns: stored?.urlPatterns ? [...stored.urlPatterns] : [],
+  };
+}
+
+export async function setExclusions(
+  adapterId: string,
+  updates: Partial<ExclusionMemory>,
+): Promise<ExclusionMemory> {
+  const current = await getExclusions(adapterId);
+  const next: ExclusionMemory = {
+    ...current,
+    ...updates,
+    urlPatterns: updates.urlPatterns !== undefined ? [...updates.urlPatterns] : current.urlPatterns,
+  };
+  await writeStorage('local', STORAGE_KEYS.exclusions(adapterId), next);
+  return next;
 }

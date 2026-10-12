@@ -1,0 +1,189 @@
+import { registerModule } from '../../core/registry';
+import { listModules } from '../../core/registry';
+import { getPrefs, setPrefs } from '../../core/storage';
+import type { GrandloadModule, ModuleApi, PageContext } from '../../core/types';
+
+const preferencesModule: GrandloadModule = {
+  id: 'preferences',
+  title: 'Préférences',
+  priority: 10,
+  canHandle: () => true, // Toujours disponible
+  mountPopup: (root: HTMLElement, _context: PageContext, api: ModuleApi): void => {
+    const panel = document.createElement('div');
+    panel.className = 'd-grid gap-3';
+    root.appendChild(panel);
+
+    const heading = document.createElement('div');
+    heading.className = 'fw-semibold';
+    heading.textContent = 'Préférences générales';
+    panel.appendChild(heading);
+
+    // 1. Format par défaut
+    const formatRow = document.createElement('div');
+    formatRow.className = 'd-grid gap-1';
+    const formatLabel = document.createElement('label');
+    formatLabel.className = 'small fw-bold';
+    formatLabel.textContent = 'Format d’archive par défaut (RG-300, 704)';
+    const formatSelect = document.createElement('select');
+    formatSelect.className = 'form-select form-select-sm';
+    for (const opt of [
+      { value: 'cbz', label: 'CBZ (par défaut)' },
+      { value: 'zip', label: 'ZIP' },
+      { value: 'folder', label: 'Dossier d’images' },
+    ]) {
+      const option = document.createElement('option');
+      option.value = opt.value;
+      option.textContent = opt.label;
+      formatSelect.appendChild(option);
+    }
+    formatRow.append(formatLabel, formatSelect);
+    panel.appendChild(formatRow);
+
+    // 2. Concurrence des téléchargements
+    const concurrencyRow = document.createElement('div');
+    concurrencyRow.className = 'd-grid gap-1';
+    const concurrencyLabel = document.createElement('label');
+    concurrencyLabel.className = 'small fw-bold';
+    concurrencyLabel.textContent = 'Téléchargements simultanés (1–6) (RG-30, 704)';
+    const concurrencyInput = document.createElement('input');
+    concurrencyInput.type = 'number';
+    concurrencyInput.min = '1';
+    concurrencyInput.max = '6';
+    concurrencyInput.className = 'form-control form-control-sm';
+    concurrencyRow.append(concurrencyLabel, concurrencyInput);
+    panel.appendChild(concurrencyRow);
+
+    // 3. Délai entre requêtes (ms)
+    const delayRow = document.createElement('div');
+    delayRow.className = 'd-grid gap-1';
+    const delayLabel = document.createElement('label');
+    delayLabel.className = 'small fw-bold';
+    delayLabel.textContent = 'Délai entre requêtes série (ms) (RG-206, 704)';
+    const delayInput = document.createElement('input');
+    delayInput.type = 'number';
+    delayInput.min = '500';
+    delayInput.step = '250';
+    delayInput.className = 'form-control form-control-sm';
+    delayRow.append(delayLabel, delayInput);
+    panel.appendChild(delayRow);
+
+    // 4. Dossier de téléchargement
+    const folderRow = document.createElement('div');
+    folderRow.className = 'd-grid gap-1';
+    const folderLabel = document.createElement('label');
+    folderLabel.className = 'small fw-bold';
+    folderLabel.textContent = 'Sous-dossier de téléchargement (RG-31, 704)';
+    const folderInput = document.createElement('input');
+    folderInput.type = 'text';
+    folderInput.className = 'form-control form-control-sm';
+    folderRow.append(folderLabel, folderInput);
+    panel.appendChild(folderRow);
+
+    // 5. Pré-exclusions automatiques
+    const autoExcludeRow = document.createElement('div');
+    autoExcludeRow.className = 'form-check form-switch';
+    const autoExcludeInput = document.createElement('input');
+    autoExcludeInput.type = 'checkbox';
+    autoExcludeInput.className = 'form-check-input';
+    autoExcludeInput.id = 'pref-auto-exclude';
+    autoExcludeInput.setAttribute('role', 'switch');
+    const autoExcludeLabel = document.createElement('label');
+    autoExcludeLabel.className = 'form-check-label small';
+    autoExcludeLabel.htmlFor = 'pref-auto-exclude';
+    autoExcludeLabel.textContent = 'Activer les pré-exclusions automatiques (RG-106)';
+    autoExcludeRow.append(autoExcludeInput, autoExcludeLabel);
+    panel.appendChild(autoExcludeRow);
+
+    // 6. Activation / désactivation des modules (RG-503, 704)
+    const modulesSection = document.createElement('div');
+    modulesSection.className = 'd-grid gap-2 border-top pt-2';
+    const modulesHeading = document.createElement('div');
+    modulesHeading.className = 'small fw-bold';
+    modulesHeading.textContent = 'Activation des modules (RG-503)';
+    modulesSection.appendChild(modulesHeading);
+
+    const modulesList = document.createElement('div');
+    modulesList.className = 'd-grid gap-1';
+    modulesSection.appendChild(modulesList);
+    panel.appendChild(modulesSection);
+
+    // Bouton de sauvegarde
+    const saveButton = document.createElement('button');
+    saveButton.type = 'button';
+    saveButton.className = 'btn btn-primary btn-sm w-100';
+    saveButton.textContent = 'Enregistrer les préférences';
+    panel.appendChild(saveButton);
+
+    const moduleToggles: Record<string, HTMLInputElement> = {};
+
+    void getPrefs().then((prefs) => {
+      formatSelect.value = prefs.format || 'cbz';
+      concurrencyInput.value = String(prefs.concurrency || 1);
+      delayInput.value = String(prefs.requestDelayMs || 1500);
+      folderInput.value = prefs.downloadFolder || 'Grandload';
+      autoExcludeInput.checked = prefs.autoExclude ?? true;
+
+      const allModules = listModules().filter((m) => m.id !== 'preferences');
+      modulesList.replaceChildren();
+      for (const m of allModules) {
+        const row = document.createElement('div');
+        row.className = 'form-check form-switch';
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = 'form-check-input';
+        checkbox.id = `mod-${m.id}`;
+        // Par défaut activé sauf si explicite false
+        checkbox.checked = prefs.modulesEnabled[m.id] !== false;
+        moduleToggles[m.id] = checkbox;
+
+        const label = document.createElement('label');
+        label.className = 'form-check-label small';
+        label.htmlFor = `mod-${m.id}`;
+        label.textContent = m.title;
+
+        row.append(checkbox, label);
+        modulesList.appendChild(row);
+      }
+    });
+
+    saveButton.addEventListener('click', () => {
+      void (async () => {
+        const concurrency = Math.min(6, Math.max(1, Number(concurrencyInput.value) || 1));
+        const requestDelayMs = Math.max(0, Number(delayInput.value) || 1500);
+        const downloadFolder = folderInput.value.trim() || 'Grandload';
+        const format = (formatSelect.value as 'cbz' | 'zip' | 'folder') || 'cbz';
+        const autoExclude = autoExcludeInput.checked;
+
+        const modulesEnabled: Record<string, boolean> = {};
+        for (const [id, input] of Object.entries(moduleToggles)) {
+          modulesEnabled[id] = input.checked;
+        }
+
+        await setPrefs({
+          format,
+          concurrency,
+          requestDelayMs,
+          downloadFolder,
+          autoExclude,
+          modulesEnabled,
+        });
+
+        saveButton.textContent = 'Préférences enregistrées !';
+        saveButton.classList.remove('btn-primary');
+        saveButton.classList.add('btn-success');
+        setTimeout(() => {
+          saveButton.textContent = 'Enregistrer les préférences';
+          saveButton.classList.remove('btn-success');
+          saveButton.classList.add('btn-primary');
+        }, 1500);
+
+        api.setStatus?.('Préférences enregistrées.');
+      })();
+    });
+  },
+};
+
+registerModule(preferencesModule);
+
+export default preferencesModule;
+

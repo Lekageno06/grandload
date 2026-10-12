@@ -1,5 +1,6 @@
 export type PageKind = 'chapter' | 'series' | 'other';
-export type JobState = 'queued' | 'running' | 'paused' | 'done' | 'failed' | 'cancelled';
+export type JobState =
+  'queued' | 'running' | 'paused' | 'done' | 'failed' | 'ignored' | 'cancelled';
 
 export interface PageContext {
   url: string;
@@ -40,6 +41,8 @@ export interface SiteAdapter {
   prepareChapter?: (doc: Document) => Promise<void>;
   acquisition: 'live-dom' | 'html-parse';
   autoExclude?: (page: PageRef) => string | null;
+  /** Motifs d'URL à pré-exclure automatiquement (logo, bannière, avatar…). */
+  excludePatterns?: readonly RegExp[];
 }
 
 export interface Packager {

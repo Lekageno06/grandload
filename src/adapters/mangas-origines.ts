@@ -114,8 +114,20 @@ function buildImageSources(image: HTMLImageElement): string[] {
 
 const mangasOriginesAdapter: SiteAdapter = {
   id: 'mangas-origines',
-  acquisition: 'live-dom',
+  acquisition: 'html-parse',
   matches: (url) => url.hostname.toLowerCase() === 'mangas-origines.fr',
+  excludePatterns: [
+    /(?:banner|banniere|discord|logo|avatar|credit|recrutement|promo)/iu,
+  ],
+  autoExclude: (page) => {
+    if (page.width !== undefined && page.width > 0 && page.width < 200) {
+      return 'Largeur < 200 px (trop petite)';
+    }
+    if (/(?:banner|banniere|discord|logo|avatar|credit|recrutement|promo)/iu.test(page.url)) {
+      return 'Motif de bannière/promo détecté';
+    }
+    return null;
+  },
   classify: (url) => {
     const pathname = url.pathname.toLowerCase();
     if (/^\/oeuvre\/[^/]+\/chapitre-\d+(?:-\d+)?\/?$/u.test(pathname)) {

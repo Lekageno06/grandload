@@ -10,6 +10,7 @@ import {
   handleJobControl,
   recoverRunningJobs,
 } from './orchestrator';
+import { createSeriesJob, handleSeriesJobControl, recoverSeriesJobs } from './series-orchestrator';
 
 type DownloadItem = {
   id: string;
@@ -79,9 +80,12 @@ chrome.runtime.onInstalled.addListener(() => {
   console.info('Grandload installed.');
 });
 
-void recoverRunningJobs().catch((error: unknown) => {
-  console.error('Impossible de reprendre les jobs interrompus.', error);
-});
+void Promise.resolve()
+  .then(recoverSeriesJobs)
+  .then(recoverRunningJobs)
+  .catch((error: unknown) => {
+    console.error('Impossible de reprendre les jobs interrompus.', error);
+  });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (!message || typeof message !== 'object' || !('type' in message)) {
@@ -163,6 +167,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       return true;
     }
 
+    if (payload.kind === 'series' && payload.params) {
+      void createSeriesJob(payload.params as Record<string, unknown>)
+        .then((data) => sendResponse({ ok: true, data }))
+        .catch((error: unknown) => {
+          const messageText =
+            error instanceof Error ? error.message : 'Création de la série impossible.';
+          sendResponse({ ok: false, error: { code: 'ADAPTER_STRUCTURE', message: messageText } });
+        });
+      return true;
+    }
+
     if (
       payload.kind === 'links' &&
       Array.isArray(payload.params?.items) &&
@@ -190,8 +205,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       jobId: string;
       action: 'pause' | 'resume' | 'cancel' | 'retry';
     };
-    void handleJobControl(payload)
-      .then((data) => sendResponse({ ok: true, data }))
+    void handleSeriesJobControl(payload)
+      .then(async (seriesResult) => {
+        if (seriesResult.handled) {
+          sendResponse({ ok: true, data: { ok: seriesResult.ok } });
+          return;
+        }
+        const data = await handleJobControl(payload);
+        sendResponse({ ok: true, data });
+      })
       .catch((error: unknown) => {
         console.error('Impossible de contrôler le job.', error);
         sendResponse({

@@ -74,7 +74,20 @@ async function initializePopup(): Promise<void> {
   }
 
   const context = response.data as PageContext;
-  const applicableModules = listModules().filter((module) => module.canHandle(context));
+  const { getPrefs } = await import('../core/storage');
+  const prefs = await getPrefs();
+
+  // Filtrer les modules selon canHandle ET modulesEnabled (RG-503)
+  const applicableModules = listModules().filter((module) => {
+    if (!module.canHandle(context)) {
+      return false;
+    }
+    // Le module préférences reste toujours accessible
+    if (module.id === 'preferences') {
+      return true;
+    }
+    return prefs.modulesEnabled[module.id] !== false;
+  });
 
   if (applicableModules.length === 0) {
     setStatus('Aucun module applicable sur cette page.');
@@ -84,24 +97,41 @@ async function initializePopup(): Promise<void> {
   const container = createTabsContainer();
   container.innerHTML = '';
 
-  for (const module of applicableModules) {
+  const tabsRow = document.createElement('div');
+  tabsRow.className = 'd-flex flex-wrap gap-1 mb-2';
+  container.appendChild(tabsRow);
+
+  const contentArea = document.createElement('div');
+  container.appendChild(contentArea);
+
+  const mountModule = (module: (typeof applicableModules)[number], activeBtn: HTMLButtonElement): void => {
+    Array.from(tabsRow.querySelectorAll('button')).forEach((btn) => {
+      btn.className = 'btn btn-sm btn-outline-primary';
+    });
+    activeBtn.className = 'btn btn-sm btn-primary';
+    contentArea.innerHTML = '';
+    const panel = document.createElement('div');
+    panel.className = 'border rounded p-3 bg-white shadow-sm';
+    contentArea.appendChild(panel);
+    module.mountPopup(panel, context, {
+      setStatus: (message: string) => setStatus(message),
+    });
+  };
+
+  applicableModules.forEach((module, index) => {
     const tabButton = document.createElement('button');
     tabButton.type = 'button';
-    tabButton.className = 'btn btn-sm btn-outline-primary me-2 mb-2';
+    tabButton.className = index === 0 ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-outline-primary';
     tabButton.textContent = module.title;
     tabButton.addEventListener('click', () => {
-      const panel = document.createElement('div');
-      panel.className = 'border rounded p-3 bg-white';
-      panel.textContent = `Module : ${module.title}`;
-      container.innerHTML = '';
-      container.appendChild(panel);
-      module.mountPopup(panel, context, {
-        setStatus: (message: string) => setStatus(message),
-      });
+      mountModule(module, tabButton);
     });
+    tabsRow.appendChild(tabButton);
 
-    container.appendChild(tabButton);
-  }
+    if (index === 0) {
+      mountModule(module, tabButton);
+    }
+  });
 
   setStatus(`${applicableModules.length} module(s) applicable(s).`);
 }
