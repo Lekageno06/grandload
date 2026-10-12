@@ -14,7 +14,6 @@ export function isAllowedUrl(url: string | URL): boolean {
     return false;
   }
 }
-
 export function normalizeUrl(rawUrl: string, baseUrl: string): string | null {
   const trimmed = rawUrl.trim();
 
@@ -133,4 +132,52 @@ export function getBaseNameFromUrl(url: string): string {
   } catch {
     return 'download';
   }
+}
+
+/**
+ * Valide un nom de dossier de téléchargement (RG-32) :
+ * - Pas de chemin absolu (commençant par / ou \ ou lettre de lecteur C:)
+ * - Pas de traversée de répertoire (..)
+ * - Caractères interdits \ / : * ? " < > |
+ * - 150 caractères maximum
+ * - Non vide
+ */
+export function validateDownloadFolder(folder: string): { valid: boolean; error?: string } {
+  const trimmed = folder.trim();
+  if (!trimmed) {
+    return { valid: false, error: 'Le nom du dossier ne peut pas être vide.' };
+  }
+
+  let decoded: string;
+  try {
+    decoded = globalThis.decodeURIComponent(trimmed);
+  } catch {
+    return { valid: false, error: 'Le nom du dossier contient un encodage URL invalide.' };
+  }
+
+  if (decoded.length > 150) {
+    return { valid: false, error: 'Le nom du dossier ne peut pas dépasser 150 caractères (RG-32).' };
+  }
+  if (/^[/\\]|^[a-zA-Z]:/u.test(decoded)) {
+    return { valid: false, error: 'Les chemins absolus sont interdits (RG-32).' };
+  }
+  if (/\.\./u.test(decoded)) {
+    return { valid: false, error: 'La séquence ".." est interdite dans le nom de dossier (RG-32).' };
+  }
+  if (/[\\/:*?"<>|]/u.test(decoded)) {
+    return {
+      valid: false,
+      error: 'Le nom du dossier contient des caractères interdits (\\ / : * ? " < > |) (RG-32).',
+    };
+  }
+  return { valid: true };
+}
+
+export function sanitizeDownloadFolder(folder: string, fallback = 'Grandload'): string {
+  const validation = validateDownloadFolder(folder);
+  if (!validation.valid) {
+    return fallback;
+  }
+  const sanitized = sanitizeFileName(folder, fallback);
+  return validateDownloadFolder(sanitized).valid ? sanitized : fallback;
 }

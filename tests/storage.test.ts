@@ -102,6 +102,7 @@ describe('storage', () => {
     const prefs = await getPrefs();
     expect(prefs.autoExclude).toBe(true);
     expect(prefs.downloadFolder).toBe('Grandload');
+    expect(prefs.acquisitionStrategy).toBe('auto');
     expect(prefs.modulesEnabled).toEqual({});
   });
 
@@ -111,6 +112,7 @@ describe('storage', () => {
       concurrency: 3,
       autoExclude: false,
       downloadFolder: 'MonManga',
+      acquisitionStrategy: 'live-dom',
       modulesEnabled: { 'generic-scan': false },
     });
 
@@ -118,6 +120,7 @@ describe('storage', () => {
     expect(prefs.concurrency).toBe(3);
     expect(prefs.autoExclude).toBe(false);
     expect(prefs.downloadFolder).toBe('MonManga');
+    expect(prefs.acquisitionStrategy).toBe('live-dom');
     expect(prefs.modulesEnabled['generic-scan']).toBe(false);
 
     await expect(getPrefs()).resolves.toMatchObject({
@@ -125,8 +128,50 @@ describe('storage', () => {
       concurrency: 3,
       autoExclude: false,
       downloadFolder: 'MonManga',
+      acquisitionStrategy: 'live-dom',
       modulesEnabled: { 'generic-scan': false },
     });
+  });
+
+  it('validates and rejects malicious or invalid download folders (RG-32)', async () => {
+    const { validateDownloadFolder } = await import('../src/shared/url-utils');
+
+    // Cas valides
+    expect(validateDownloadFolder('Grandload').valid).toBe(true);
+    expect(validateDownloadFolder('Mangas-2024').valid).toBe(true);
+    expect(validateDownloadFolder('Overgeared Season 1').valid).toBe(true);
+
+    // Cas refusés (RG-32)
+    // 1. Vide
+    expect(validateDownloadFolder('').valid).toBe(false);
+    expect(validateDownloadFolder('   ').valid).toBe(false);
+
+    // 2. Traversée de répertoire (..)
+    const dotDot = validateDownloadFolder('../Downloads');
+    expect(dotDot.valid).toBe(false);
+    expect(dotDot.error).toContain('..');
+
+    // 3. Chemin absolu
+    const slash = validateDownloadFolder('/etc/passwd');
+    expect(slash.valid).toBe(false);
+    expect(slash.error).toContain('absolus');
+
+    const winDrive = validateDownloadFolder('C:\\Downloads');
+    expect(winDrive.valid).toBe(false);
+    expect(winDrive.error).toContain('absolus');
+
+    // 4. Caractères interdits (\ / : * ? " < > |)
+    const invalidChar = validateDownloadFolder('manga/chapitre');
+    expect(invalidChar.valid).toBe(false);
+    expect(invalidChar.error).toContain('interdits');
+
+    const colonChar = validateDownloadFolder('manga:test');
+    expect(colonChar.valid).toBe(false);
+
+    // 5. Plus de 150 caractères
+    const tooLong = validateDownloadFolder('a'.repeat(151));
+    expect(tooLong.valid).toBe(false);
+    expect(tooLong.error).toContain('150 caractères');
   });
 
   it('persists and retrieves exclusions memory per adapter (RG-107)', async () => {

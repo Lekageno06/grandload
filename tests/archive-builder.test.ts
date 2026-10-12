@@ -44,6 +44,19 @@ describe('archive builder', () => {
     ).toBe('Grandload/A & B _Saga_/A & B _Saga_ - Chapitre 012.zip');
   });
 
+  it('uses a validated destination folder and rejects path traversal', () => {
+    const folderMeta: ArchiveMeta = {
+      ...metadata,
+      series: 'Overgeared',
+      chapter: { ...metadata.chapter, number: 12 },
+    };
+    expect(buildChapterDownloadFilename(folderMeta, '.cbz', 'Mangas 2026')).toBe(
+      'Grandload/Mangas 2026/Overgeared/Overgeared - Chapitre 012.cbz',
+    );
+    expect(() => buildChapterDownloadFilename(folderMeta, '.cbz', '../outside')).toThrow('..');
+    expect(() => buildChapterDownloadFilename(folderMeta, '.cbz', 'C:\\Downloads')).toThrow('absolus');
+  });
+
   it('fetches pages in reading order, names them and reports progress', async () => {
     const generatedBlobs: Blob[] = [];
     vi.spyOn(URL, 'createObjectURL').mockImplementation((blob) => {

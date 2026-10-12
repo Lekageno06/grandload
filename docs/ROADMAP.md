@@ -45,9 +45,10 @@
 
 ## Jalon 7 — Publication
 
-- [ ] Variante Firefox (`browser_specific_settings`, archive builder sans offscreen)
-- [ ] Icônes finales, captures, politique de confidentialité
-- [ ] Packaging (`npm run zip`) et soumission Chrome Web Store / Edge Add-ons / AMO
+- [x] Variante Firefox (`browser_specific_settings`, archive builder sans offscreen)
+- [x] Icônes finales, captures, politique de confidentialité
+- [x] Packaging (`npm run zip`)
+- [ ] Soumission Chrome Web Store / Edge Add-ons / AMO
 
 ## Idées de modules futurs
 

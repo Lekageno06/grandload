@@ -1,6 +1,6 @@
 {
   "name": "grandload",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,6 +9,7 @@
     "lint": "eslint . --ext .ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "zip": "node scripts/package-release.mjs",
     "format": "prettier --write ."
   },
   "devDependencies": {

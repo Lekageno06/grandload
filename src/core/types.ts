@@ -38,6 +38,7 @@ export interface SiteAdapter {
   classify: (url: URL) => PageKind;
   readSeries: (doc: Document) => SeriesInfo;
   readChapterPages: (doc: Document) => PageRef[];
+  countChapterPageElements?: (doc: Document) => number;
   prepareChapter?: (doc: Document) => Promise<void>;
   acquisition: 'live-dom' | 'html-parse';
   autoExclude?: (page: PageRef) => string | null;

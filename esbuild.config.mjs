@@ -7,72 +7,81 @@ const publicDir = 'public';
 const watchMode = process.argv.includes('--watch');
 const buildTimestamp = new Date().toISOString();
 const buildDefines = { __BUILD_DATE__: JSON.stringify(buildTimestamp) };
+const releaseVersion = process.env.GRANDLOAD_VERSION ?? '0.2.0';
 
-const entries = {
+const commonEntries = {
   'service-worker': 'src/background/service-worker.ts',
   content: 'src/content/content.ts',
-  offscreen: 'src/offscreen/offscreen.ts',
   popup: 'src/popup/main.ts',
 };
 
-async function bundle() {
-  fs.rmSync(outDir, { recursive: true, force: true });
-  fs.mkdirSync(path.join(outDir, 'icons'), { recursive: true });
-
-  for (const [name, entry] of Object.entries(entries)) {
-    await build({
-      entryPoints: [entry],
-      bundle: true,
-      outfile: path.join(outDir, `${name}.js`),
-      format: 'iife',
-      target: ['chrome120'],
-      platform: 'browser',
-      sourcemap: false,
-      minify: false,
-      logLevel: 'info',
-      legalComments: 'none',
-      define: buildDefines,
-    });
+function makeManifest(browser) {
+  const manifest = JSON.parse(fs.readFileSync(path.join(publicDir, 'manifest.json'), 'utf8'));
+  manifest.version = releaseVersion;
+  if (browser === 'firefox') {
+    manifest.permissions = manifest.permissions.filter((permission) => permission !== 'offscreen');
+    manifest.background = { scripts: ['service-worker.js'], type: 'module' };
+    manifest.browser_specific_settings = {
+      gecko: {
+        id: '@grandload-extension',
+        strict_min_version: '128.0',
+        data_collection_permissions: { required: ['none'] },
+      },
+    };
+  } else {
+    manifest.background = { service_worker: 'service-worker.js' };
   }
+  return manifest;
+}
 
-  fs.cpSync(publicDir, outDir, { recursive: true });
+async function buildEntry(entry, outfile, target) {
+  await build({
+    entryPoints: [entry],
+    bundle: true,
+    outfile,
+    format: 'iife',
+    target: [target],
+    platform: 'browser',
+    sourcemap: false,
+    minify: false,
+    logLevel: 'info',
+    legalComments: 'none',
+    define: buildDefines,
+  });
+}
 
-  const bootstrapSource = path.join(
-    'node_modules',
-    'bootstrap',
-    'dist',
-    'css',
-    'bootstrap.min.css',
+async function buildVariant(browser, variantDir) {
+  const isFirefox = browser === 'firefox';
+  const target = isFirefox ? 'firefox128' : 'chrome120';
+  const entries = isFirefox
+    ? commonEntries
+    : { ...commonEntries, offscreen: 'src/offscreen/offscreen.ts' };
+  fs.mkdirSync(path.join(variantDir, 'icons'), { recursive: true });
+  for (const [name, entry] of Object.entries(entries)) {
+    await buildEntry(entry, path.join(variantDir, `${name}.js`), target);
+  }
+  fs.cpSync(publicDir, variantDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(variantDir, 'manifest.json'),
+    `${JSON.stringify(makeManifest(browser), null, 2)}\n`,
   );
-  const bootstrapTarget = path.join(outDir, 'vendor', 'bootstrap.min.css');
+  const bootstrapSource = path.join('node_modules', 'bootstrap', 'dist', 'css', 'bootstrap.min.css');
+  const bootstrapTarget = path.join(variantDir, 'vendor', 'bootstrap.min.css');
   fs.mkdirSync(path.dirname(bootstrapTarget), { recursive: true });
   fs.copyFileSync(bootstrapSource, bootstrapTarget);
+  if (isFirefox) fs.rmSync(path.join(variantDir, 'offscreen.html'), { force: true });
+}
 
-  const iconSizes = [16, 32, 48, 128];
-  for (const size of iconSizes) {
-    const source = path.join(publicDir, 'icons', `${size}.png`);
-    if (fs.existsSync(source)) {
-      fs.copyFileSync(source, path.join(outDir, 'icons', `${size}.png`));
-    }
-  }
-
-  console.log('Build finished.');
+async function bundle() {
+  fs.rmSync(outDir, { recursive: true, force: true });
+  await buildVariant('chrome', outDir);
+  await buildVariant('firefox', path.join(outDir, 'firefox'));
+  console.log('Build finished for Chrome and Firefox.');
 }
 
 if (watchMode) {
-  console.log('Watching for changes...');
-  await build({
-    entryPoints: Object.values(entries),
-    bundle: true,
-    outdir: outDir,
-    format: 'iife',
-    target: ['chrome120'],
-    platform: 'browser',
-    sourcemap: false,
-    logLevel: 'info',
-    define: buildDefines,
-    watch: true,
-  });
+  console.log('Watching the Chrome build...');
+  await buildVariant('chrome', outDir);
 } else {
   await bundle();
 }

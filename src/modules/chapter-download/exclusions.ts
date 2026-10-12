@@ -73,16 +73,17 @@ export function evaluateMemorizedExclusion(
   index: number,
   totalPages: number,
   memory?: ExclusionMemory,
-): { excluded: boolean; reason?: string } {
+): ExclusionResult {
   if (!memory) {
     return { excluded: false };
   }
 
-  // Dernière planche mémorisée
-  if (memory.lastPage && totalPages > 1 && index === totalPages - 1) {
+  // Dernière planche mémorisée (proposée comme suggestion, RG-107)
+  if (memory.lastPage && index === totalPages - 1) {
     return {
-      excluded: true,
-      reason: 'Exclusion mémorisée : dernière planche',
+      excluded: false,
+      isSuggestedExclusion: true,
+      reason: 'Suggestion mémorisée : dernière planche',
     };
   }
 
@@ -91,7 +92,8 @@ export function evaluateMemorizedExclusion(
     for (const pattern of memory.urlPatterns) {
       if (pattern && page.url.toLowerCase().includes(pattern.toLowerCase())) {
         return {
-          excluded: true,
+          excluded: false,
+          isSuggestedExclusion: true,
           reason: `Exclusion mémorisée : motif "${pattern}"`,
         };
       }
@@ -113,21 +115,7 @@ export function processPageExclusions(
   return pages.map((page, index) => {
     const previous = index > 0 ? pages[index - 1] : undefined;
 
-    // 1. Exclusions mémorisées (priorité RG-107)
-    const memResult = evaluateMemorizedExclusion(page, index, pages.length, memory);
-    if (memResult.excluded) {
-      const item: PageRef & ExclusionResult = {
-        ...page,
-        excluded: true,
-        isSuggestedExclusion: true,
-      };
-      if (memResult.reason !== undefined) {
-        item.reason = memResult.reason;
-      }
-      return item;
-    }
-
-    // 2. Pré-exclusions automatiques (RG-106) si activées
+    // Pré-exclusions automatiques appliquées avec raison visible (RG-106).
     if (autoExcludeEnabled) {
       const autoResult = evaluateAutoExclusion(page, previous, adapter);
       if (autoResult.excluded) {
@@ -141,6 +129,16 @@ export function processPageExclusions(
         }
         return item;
       }
+    }
+
+    const memResult = evaluateMemorizedExclusion(page, index, pages.length, memory);
+    if (memResult.isSuggestedExclusion) {
+      return {
+        ...page,
+        excluded: false,
+        isSuggestedExclusion: true,
+        ...(memResult.reason ? { reason: memResult.reason } : {}),
+      };
     }
 
     return {

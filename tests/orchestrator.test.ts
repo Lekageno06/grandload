@@ -26,8 +26,10 @@ let chromeMock: {
   runtime: {
     id: string;
     lastError?: undefined;
+    getContexts: ReturnType<typeof vi.fn>;
     sendMessage: (message: unknown, callback?: (response: unknown) => void) => void;
   };
+  offscreen: { createDocument: ReturnType<typeof vi.fn> };
   storage: {
     local: {
       get: (key: string, callback: (items: Record<string, unknown>) => void) => void;
@@ -64,11 +66,13 @@ describe('chapter job orchestration', () => {
     chromeMock = {
       runtime: {
         id: 'grandload-id',
+        getContexts: vi.fn(() => Promise.resolve([])),
         sendMessage: (message, callback) => {
           sentMessages.push(message as Message);
           callback?.({ ok: true, data: { ok: true } });
         },
       },
+      offscreen: { createDocument: vi.fn() },
       storage: { local: storageArea, session: storageArea },
       downloads: {
         cancel: vi.fn((_downloadId: number, callback?: () => void) => callback?.()),

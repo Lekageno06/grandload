@@ -7,7 +7,7 @@ import {
 } from '../core/storage';
 import type { ArchiveBuildResult, ArchiveMeta, Job, JobState, PageRef } from '../core/types';
 import type { MessagePayloadMap, MessageResponse } from '../core/messaging';
-import { sanitizeFileName } from '../shared/url-utils';
+import { sanitizeDownloadFolder, sanitizeFileName, validateDownloadFolder } from '../shared/url-utils';
 import { getPackagerMetadata } from '../packagers/metadata';
 
 export type ChapterJobParams = {
@@ -18,6 +18,8 @@ export type ChapterJobParams = {
   downloadId?: number;
   blobUrls?: string[];
 };
+
+const localArchiveControllers = new Map<string, AbortController>();
 
 function createJobId(): string {
   return `chapter-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -136,13 +138,23 @@ function chapterNumberFromUrl(url: string): number {
   return Number(match[1]) + (match[2] ? Number(`0.${match[2]}`) : 0);
 }
 
-export function buildChapterDownloadFilename(meta: ArchiveMeta, extension: string): string {
+export function buildChapterDownloadFilename(
+  meta: ArchiveMeta,
+  extension: string,
+  downloadFolder = 'Grandload',
+): string {
+  const folderValidation = validateDownloadFolder(downloadFolder);
+  if (!folderValidation.valid) {
+    throw new GrandloadError('INVALID_URL', folderValidation.error ?? 'Dossier de destination invalide.');
+  }
+  const sanitizedFolder = sanitizeDownloadFolder(downloadFolder);
+  const root = sanitizedFolder === 'Grandload' ? 'Grandload' : `Grandload/${sanitizedFolder}`;
   const series = sanitizeFileName(meta.series, 'Série');
   const chapterNumber = meta.chapter.number;
   const whole = String(Math.trunc(chapterNumber)).padStart(3, '0');
   const fraction = String(chapterNumber).split('.')[1];
   const number = fraction ? `${whole}.${fraction}` : whole;
-  return `Grandload/${series}/${series} - Chapitre ${number}${extension}`;
+  return `${root}/${series}/${series} - Chapitre ${number}${extension}`;
 }
 
 function parseChapterParams(value: Record<string, unknown>): ChapterJobParams {
@@ -166,14 +178,25 @@ function parseChapterParams(value: Record<string, unknown>): ChapterJobParams {
     throw new GrandloadError('ADAPTER_STRUCTURE', 'Les métadonnées du chapitre sont invalides.');
   }
 
+  const options =
+    typeof value.options === 'object' && value.options !== null
+      ? (value.options as Record<string, unknown>)
+      : {};
+  const requestedFolder = options.downloadFolder;
+  if (requestedFolder !== undefined && typeof requestedFolder !== 'string') {
+    throw new GrandloadError('INVALID_URL', 'Le dossier de destination doit être un nom relatif.');
+  }
+  const downloadFolder = typeof requestedFolder === 'string' ? requestedFolder : 'Grandload';
+  const folderValidation = validateDownloadFolder(downloadFolder);
+  if (!folderValidation.valid) {
+    throw new GrandloadError('INVALID_URL', folderValidation.error ?? 'Dossier de destination invalide.');
+  }
+
   return {
     pages: value.pages as PageRef[],
     packagerId: value.packagerId,
     meta,
-    options:
-      typeof value.options === 'object' && value.options !== null
-        ? (value.options as Record<string, unknown>)
-        : {},
+    options: { ...options, downloadFolder: sanitizeDownloadFolder(downloadFolder) },
   };
 }
 
@@ -192,6 +215,14 @@ async function ensureOffscreenDocument(): Promise<void> {
     reasons: ['BLOBS'],
     justification: 'Télécharger les planches et fabriquer les archives du chapitre.',
   });
+}
+
+function supportsOffscreenArchiveRuntime(): boolean {
+  return (
+    typeof chrome !== 'undefined' &&
+    typeof chrome.offscreen?.createDocument === 'function' &&
+    typeof chrome.runtime?.getContexts === 'function'
+  );
 }
 
 function sendToOffscreen<T extends 'BUILD_ARCHIVE' | 'CANCEL_ARCHIVE' | 'REVOKE_BLOBS'>(
@@ -233,16 +264,19 @@ function artifactDownloads(
   result: ArchiveBuildResult,
   meta: ArchiveMeta,
   extension: string,
+  downloadFolder: string,
 ): Array<{ blobUrl: string; filename: string }> {
   if (result.kind === 'archive') {
-    return [{ blobUrl: result.blobUrl, filename: buildChapterDownloadFilename(meta, extension) }];
+    return [{ blobUrl: result.blobUrl, filename: buildChapterDownloadFilename(meta, extension, downloadFolder) }];
   }
 
+  const sanitizedFolder = sanitizeDownloadFolder(downloadFolder);
+  const root = sanitizedFolder === 'Grandload' ? 'Grandload' : `Grandload/${sanitizedFolder}`;
   const series = sanitizeFileName(meta.series, 'Série');
   const chapterNumber = String(meta.chapter.number);
   return result.files.map((file) => ({
     blobUrl: file.blobUrl,
-    filename: `Grandload/${series}/Chapitre ${chapterNumber}/${file.name}`,
+    filename: `${root}/${series}/Chapitre ${chapterNumber}/${file.name}`,
   }));
 }
 
@@ -337,10 +371,54 @@ async function revokeUrls(blobUrls: string[]): Promise<void> {
   if (blobUrls.length === 0) {
     return;
   }
+  if (!supportsOffscreenArchiveRuntime()) {
+    const { revokeBlobUrls } = await import('../offscreen/archive-builder');
+    revokeBlobUrls(blobUrls);
+    return;
+  }
   try {
     await sendToOffscreen('REVOKE_BLOBS', { blobUrls });
   } catch (error) {
     console.error('Échec de révocation des blob URLs.', error);
+  }
+}
+
+async function buildArchiveInCurrentRuntime(
+  jobId: string,
+  params: ChapterJobParams,
+): Promise<ArchiveBuildResult> {
+  if (supportsOffscreenArchiveRuntime()) {
+    await ensureOffscreenDocument();
+    const response = await sendToOffscreen('BUILD_ARCHIVE', {
+      jobId,
+      pages: params.pages,
+      packagerId: params.packagerId,
+      meta: params.meta,
+      options: params.options,
+    });
+    if (!response.ok) {
+      throw new GrandloadError('FETCH_FAILED', response.error.message);
+    }
+    return response.data;
+  }
+
+  // Firefox MV3 exécute ce chemin dans la page d’événement, sans API offscreen.
+  const { createArchive } = await import('../offscreen/archive-builder');
+  const controller = new AbortController();
+  localArchiveControllers.set(jobId, controller);
+  try {
+    return await createArchive({
+      jobId,
+      pages: params.pages,
+      packagerId: params.packagerId,
+      meta: params.meta,
+      signal: controller.signal,
+      onProgress: (progressJobId, done, total) => {
+        void handleArchiveProgress({ jobId: progressJobId, done, total });
+      },
+    });
+  } finally {
+    localArchiveControllers.delete(jobId);
   }
 }
 
@@ -361,21 +439,10 @@ export async function runChapterJob(jobId: string): Promise<void> {
 
   let result: ArchiveBuildResult | undefined;
   try {
-    await ensureOffscreenDocument();
     if ((await getJobs())[jobId]?.state === 'cancelled') {
       return;
     }
-    const response = await sendToOffscreen('BUILD_ARCHIVE', {
-      jobId,
-      pages: params.pages,
-      packagerId: params.packagerId,
-      meta: params.meta,
-      options: params.options,
-    });
-    if (!response.ok) {
-      throw new GrandloadError('FETCH_FAILED', response.error.message);
-    }
-    result = response.data;
+    result = await buildArchiveInCurrentRuntime(jobId, params);
     const urls = getBlobUrls(result);
     await updateJob(jobId, (job) => ({ ...job, params: { ...job.params, blobUrls: urls } }));
 
@@ -384,7 +451,9 @@ export async function runChapterJob(jobId: string): Promise<void> {
       throw new GrandloadError('REGISTRY_NOT_FOUND', `Packager inconnu : ${params.packagerId}`);
     }
 
-    for (const artifact of artifactDownloads(result, params.meta, packager.extension)) {
+    const folderValue = params.options.downloadFolder;
+    const downloadFolder = typeof folderValue === 'string' ? folderValue : 'Grandload';
+    for (const artifact of artifactDownloads(result, params.meta, packager.extension, downloadFolder)) {
       const current = (await getJobs())[jobId];
       if (!current || current.state === 'cancelled') {
         return;
@@ -472,6 +541,7 @@ export async function cancelChapterJob(jobId: string): Promise<{ ok: boolean }> 
   }
 
   await updateJob(jobId, (current) => ({ ...current, state: 'cancelled' }));
+  localArchiveControllers.get(jobId)?.abort();
   try {
     await sendToOffscreen('CANCEL_ARCHIVE', { jobId });
   } catch {

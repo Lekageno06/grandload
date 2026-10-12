@@ -198,6 +198,10 @@ const genericAdapter: SiteAdapter = {
 
     return pages.map((page, index) => ({ ...page, index }));
   },
+  countChapterPageElements: (doc) => {
+    const container = chooseDominantContainer(doc);
+    return (container ?? doc).querySelectorAll('img').length;
+  },
 };
 
 export { genericAdapter };

@@ -65,4 +65,13 @@ Valeurs échappées (`& < > " '`). Généré par `packagers/comicinfo.ts`.
 
 ## Firefox
 
-L'API `offscreen` n'existe pas : prévoir une implémentation de `archive-builder` exécutée dans l'event page (qui a accès au DOM). L'interface `Packager` reste identique ; seul l'hôte d'exécution change.
+L'API `offscreen` n'existe pas : la variante Firefox exécute `archive-builder` dans la page d'événement, qui dispose de `Blob`, `URL.createObjectURL` et de l'interface `Packager`. Le résultat et le cycle de révocation restent identiques ; seul l'hôte d'exécution change.
+
+Écarts connus :
+
+- téléchargements : Firefox accepte `filename` relatif et `conflictAction: 'uniquify'`, mais ses API sont naturellement orientées Promise ; la variante conserve l'interface callback compatible exposée par Firefox ;
+- permissions optionnelles : Firefox peut afficher la permission d'hôte dans le gestionnaire des modules complémentaires et l'accord est demandé au clic ; aucun accès hôte permanent n'est ajouté ;
+- `downloads.onDeterminingFilename` : le listener est installé seulement si l'événement existe. Sinon Firefox utilise le nom passé directement à `downloads.download`, sans garantie de remplacer le nom qu'un autre gestionnaire imposerait ;
+- le manifest Firefox utilise `background.scripts` pour sa page d'événement, tandis que Chrome utilise `background.service_worker` ; `offscreen` est absent du manifest Firefox.
+
+Le polyfill `browser.*` n'est pas nécessaire : Firefox fournit la compatibilité `chrome.*` callback utilisée par le code. Si une API n'est pas disponible, elle est détectée et le comportement de repli est explicite.

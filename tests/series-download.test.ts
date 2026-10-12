@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { JSDOM } from 'jsdom';
 
 import {
   acquireSeriesTemporaryTabLock,
@@ -6,12 +7,13 @@ import {
   releaseSeriesTemporaryTabLock,
   setJobs,
 } from '../src/core/storage';
-import { getModule } from '../src/core/registry';
+import { getModule, registerAdapter } from '../src/core/registry';
 import '../src/modules';
-import type { ChapterRef, Job } from '../src/core/types';
+import type { ChapterRef, Job, PageRef, SiteAdapter } from '../src/core/types';
 import { requeueFailedJob } from '../src/background/orchestrator';
 import {
   backoffAndPauseSeriesForRateLimit,
+  chooseAcquisitionStrategy,
   createSeriesJob,
   getRateLimitBackoffMs,
   handleSeriesJobControl,
@@ -49,6 +51,24 @@ const chapters: ChapterRef[] = [
 ];
 
 let storage: Map<string, unknown>;
+
+function makeHtmlAdapter(id: string): SiteAdapter {
+  return {
+    id,
+    acquisition: 'html-parse',
+    matches: (url) => url.hostname === 'example.test',
+    classify: () => 'chapter',
+    readSeries: () => ({ title: 'Test', chapters: [] }),
+    countChapterPageElements: (doc) => doc.querySelectorAll('img.chapter-page').length,
+    readChapterPages: (doc): PageRef[] =>
+      Array.from(doc.querySelectorAll<HTMLImageElement>('img.chapter-page')).flatMap((image, index) => {
+        const rawUrl = image.getAttribute('src')?.trim();
+        if (!rawUrl) return [];
+        const url = new URL(rawUrl, doc.baseURI).toString();
+        return [{ index: index + 1, url, ext: new URL(url).pathname.split('.').at(-1) ?? '' }];
+      }),
+  };
+}
 
 function storageArea(): {
   get: (key: string, callback: (items: Record<string, unknown>) => void) => void;
@@ -124,6 +144,7 @@ describe('series download', () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     Reflect.deleteProperty(globalThis, 'chrome');
   });
 
@@ -231,6 +252,14 @@ describe('series download', () => {
     expect(settled).toBe(false);
     await vi.advanceTimersByTimeAsync(1);
     await expect(promise).resolves.toBe(8000);
+  });
+
+  it('chooses html-parse only when the adapter supports it and prefs allow it', () => {
+    expect(chooseAcquisitionStrategy('live-dom', 'html-parse')).toBe('live-dom');
+    expect(chooseAcquisitionStrategy('live-dom', 'auto')).toBe('live-dom');
+    expect(chooseAcquisitionStrategy('html-parse', 'live-dom')).toBe('live-dom');
+    expect(chooseAcquisitionStrategy('html-parse', 'auto')).toBe('html-parse');
+    expect(chooseAcquisitionStrategy('html-parse', 'html-parse')).toBe('html-parse');
   });
 
   it('waits with a fake clock, requeues a rate-limited chapter, then pauses its parent', async () => {
@@ -413,5 +442,97 @@ describe('series download', () => {
     expect(jobs[parent.id]?.state).toBe('failed');
     expect(jobs[parent.id]?.error?.message).toBe('Interrompu (relance annulée)');
     expect(jobs[child.id]?.state).toBe('failed');
+  });
+
+  describe('Acquisition fallback from raw HTML', () => {
+    it.each([
+      '<html><body><p>No reader markup</p></body></html>',
+      '<html><body><img class="chapter-page"></body></html>',
+      '<html><body><img class="chapter-page" src="/one.webp"><img class="chapter-page"></body></html>',
+    ])('falls back to live-dom when HTML is empty, has blank images, or is incomplete', async (html) => {
+      const adapterId = `html-fixture-${Math.random().toString(16).slice(2)}`;
+      registerAdapter(makeHtmlAdapter(adapterId));
+      const { readChapterPagesForSeries } = await import('../src/background/series-orchestrator');
+      const { setPrefs } = await import('../src/core/storage');
+      await setPrefs({ acquisitionStrategy: 'auto' });
+
+      const parent = parentJob(['html-child'], Date.now(), 'running');
+      const child = childJob('html-child', parent.id);
+      child.params.adapterId = adapterId;
+      child.params.chapter = { number: 1, label: 'Chapitre 1', url: 'https://example.test/chapter/1' };
+      await setJobs({ [parent.id]: parent, [child.id]: child });
+
+      const originalParser = globalThis.DOMParser;
+      globalThis.DOMParser = new JSDOM().window.DOMParser as unknown as typeof DOMParser;
+      vi.stubGlobal('fetch', vi.fn(async () => new Response(html, { status: 200 })));
+      const originalChrome = globalThis.chrome;
+      const tabsCreated = vi.fn((_options: unknown, callback: (tab: { id: number }) => void) => callback({ id: 998 }));
+      const tabsRemoved = vi.fn((_tabId: number, callback?: () => void) => callback?.());
+      Object.defineProperty(globalThis, 'chrome', {
+        configurable: true,
+        value: {
+          ...originalChrome,
+          tabs: {
+            create: tabsCreated,
+            remove: tabsRemoved,
+            onUpdated: { addListener: vi.fn(), removeListener: vi.fn() },
+            onRemoved: { addListener: vi.fn(), removeListener: vi.fn() },
+            get: (_tabId: number, callback: (tab: { status: string }) => void) => callback({ status: 'complete' }),
+            sendMessage: (_tabId: number, _message: unknown, callback: (response: unknown) => void) =>
+              callback({ ok: true, data: [{ index: 1, url: 'https://cdn.example.test/page.webp', ext: 'webp' }] }),
+          },
+          scripting: { executeScript: (_options: unknown, callback?: () => void) => callback?.() },
+        },
+      });
+
+      try {
+        const result = await readChapterPagesForSeries(parent, child);
+        expect(result.strategyUsed).toBe('live-dom');
+        expect(result.pages).toHaveLength(1);
+        expect(tabsCreated).toHaveBeenCalledOnce();
+        expect(tabsRemoved).toHaveBeenCalledWith(998, expect.any(Function));
+      } finally {
+        globalThis.DOMParser = originalParser;
+      }
+    });
+
+    it('never fetches raw HTML when mangas-origines declares live-dom, even if prefs force html-parse', async () => {
+      await import('../src/adapters');
+      const { readChapterPagesForSeries } = await import('../src/background/series-orchestrator');
+      const { setPrefs } = await import('../src/core/storage');
+      await setPrefs({ acquisitionStrategy: 'html-parse' });
+      const parent = parentJob(['manga-child'], Date.now(), 'running');
+      const child = childJob('manga-child', parent.id);
+      child.params.adapterId = 'mangas-origines';
+      await setJobs({ [parent.id]: parent, [child.id]: child });
+      const fetchSpy = vi.fn();
+      vi.stubGlobal('fetch', fetchSpy);
+      const originalChrome = globalThis.chrome;
+      Object.defineProperty(globalThis, 'chrome', {
+        configurable: true,
+        value: {
+          ...originalChrome,
+          tabs: {
+            create: (_options: unknown, callback: (tab: { id: number }) => void) => callback({ id: 997 }),
+            remove: (_tabId: number, callback?: () => void) => callback?.(),
+            onUpdated: { addListener: vi.fn(), removeListener: vi.fn() },
+            onRemoved: { addListener: vi.fn(), removeListener: vi.fn() },
+            get: (_tabId: number, callback: (tab: { status: string }) => void) => callback({ status: 'complete' }),
+            sendMessage: (_tabId: number, _message: unknown, callback: (response: unknown) => void) =>
+              callback({ ok: true, data: [{ index: 1, url: 'https://cdn.example.test/page.webp', ext: 'webp' }] }),
+          },
+          scripting: { executeScript: (_options: unknown, callback?: () => void) => callback?.() },
+        },
+      });
+      const originalParser = globalThis.DOMParser;
+      globalThis.DOMParser = new JSDOM().window.DOMParser as unknown as typeof DOMParser;
+      try {
+        const result = await readChapterPagesForSeries(parent, child);
+        expect(fetchSpy).not.toHaveBeenCalled();
+        expect(result.strategyUsed).toBe('live-dom');
+      } finally {
+        globalThis.DOMParser = originalParser;
+      }
+    });
   });
 });

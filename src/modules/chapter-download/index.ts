@@ -23,6 +23,24 @@ type SelectablePage = PageRef & {
 };
 type ChapterDomData = { pages: SelectablePage[]; seriesTitle: string; chapterLabel: string };
 
+export function getChapterSelectionCounts(items: readonly Pick<SelectablePage, 'selected'>[]): {
+  included: number;
+  excluded: number;
+} {
+  const included = items.filter((item) => item.selected).length;
+  return { included, excluded: items.length - included };
+}
+
+export function getExclusionBadgeText(item: {
+  selected: boolean;
+  excludeReason?: string | undefined;
+  isSuggestedExclusion?: boolean | undefined;
+}): string | null {
+  if (item.isSuggestedExclusion) return item.excludeReason || 'Suggestion mémorisée';
+  if (!item.selected) return item.excludeReason || 'Exclusion manuelle';
+  return null;
+}
+
 function collectChapterImages(tabId: number, adapterId: string): Promise<ChapterDomData> {
   if (
     typeof chrome === 'undefined' ||
@@ -243,6 +261,11 @@ const chapterDownloadModule: GrandloadModule = {
     jobsSection.append(jobsHeading, jobsList, clearHistory);
     panel.appendChild(jobsSection);
 
+    const counterText = document.createElement('div');
+    counterText.className = 'small text-muted text-center py-1';
+    counterText.textContent = '0 planche incluse / 0 exclue';
+    panel.appendChild(counterText);
+
     const buttonDownload = document.createElement('button');
     buttonDownload.type = 'button';
     buttonDownload.className = 'btn btn-primary w-100';
@@ -258,7 +281,7 @@ const chapterDownloadModule: GrandloadModule = {
     panel.appendChild(buttonCancel);
 
     const renderGrid = (): void => {
-      grid.innerHTML = '';
+      grid.replaceChildren();
 
       if (state.items.length === 0) {
         grid.appendChild(buildEmptyState());
@@ -277,12 +300,8 @@ const chapterDownloadModule: GrandloadModule = {
         checkbox.checked = item.selected;
         checkbox.disabled = state.busy;
         checkbox.addEventListener('change', () => {
-          item.selected = checkbox.checked;
-          if (item.selected) {
-            entry.classList.remove('bg-light', 'text-muted');
-          } else {
-            entry.classList.add('bg-light', 'text-muted');
-          }
+          setItemSelection(item, checkbox.checked);
+          renderGrid();
           updateActions();
         });
 
@@ -293,12 +312,15 @@ const chapterDownloadModule: GrandloadModule = {
         entry.appendChild(checkbox);
         entry.appendChild(text);
 
-        // Badge d'exclusion (visible, réversible)
-        if (!item.selected && item.excludeReason) {
+        // Une suggestion reste incluse et visible; une exclusion a toujours une raison.
+        const badgeText = getExclusionBadgeText(item);
+        if (badgeText) {
           const badge = document.createElement('span');
-          badge.className = 'badge bg-warning text-dark text-wrap text-start ms-auto';
+          badge.className = item.isSuggestedExclusion
+            ? 'badge bg-info text-dark text-wrap text-start ms-auto'
+            : 'badge bg-warning text-dark text-wrap text-start ms-auto';
           badge.style.fontSize = '0.7rem';
-          badge.textContent = item.excludeReason;
+          badge.textContent = badgeText;
           entry.appendChild(badge);
         }
 
@@ -306,11 +328,24 @@ const chapterDownloadModule: GrandloadModule = {
       }
     };
 
+    const setItemSelection = (item: SelectablePage, selected: boolean): void => {
+      item.selected = selected;
+      if (selected) {
+        delete item.isAutoExcluded;
+        delete item.isSuggestedExclusion;
+        delete item.excludeReason;
+      } else if (!item.excludeReason || item.isSuggestedExclusion) {
+        item.isSuggestedExclusion = false;
+        item.excludeReason = 'Exclusion manuelle';
+      }
+    };
+
     const updateActions = (): void => {
-      const selectedCount = state.items.filter((item) => item.selected).length;
-      buttonDownload.disabled = state.busy || selectedCount === 0;
+      const counts = getChapterSelectionCounts(state.items);
+      counterText.textContent = `${counts.included} planche${counts.included > 1 ? 's' : ''} incluse${counts.included > 1 ? 's' : ''} / ${counts.excluded} exclue${counts.excluded > 1 ? 's' : ''}`;
+      buttonDownload.disabled = state.busy || counts.included === 0;
       buttonDownload.textContent =
-        selectedCount === 0 ? 'Télécharger' : `Télécharger (${selectedCount})`;
+        counts.included === 0 ? 'Télécharger' : `Télécharger (${counts.included})`;
       formatSelect.disabled = state.busy;
       buttonCancel.hidden = !state.busy;
     };
@@ -517,6 +552,7 @@ const chapterDownloadModule: GrandloadModule = {
           return match?.[1] ? Number(match[1]) + (match[2] ? Number(`0.${match[2]}`) : 0) : 0;
         })();
         const chapterLabel = state.chapterData.chapterLabel || `Chapitre ${chapterNumber}`;
+        const prefs = await getPrefs();
         const meta: ArchiveMeta = {
           series: state.chapterData.seriesTitle,
           chapter: { number: chapterNumber, label: chapterLabel, url: ctx.url },
@@ -530,7 +566,7 @@ const chapterDownloadModule: GrandloadModule = {
             pages: selected.map(({ id: _id, label: _label, selected: _selected, ...page }) => page),
             packagerId: formatSelect.value as 'cbz' | 'zip' | 'folder',
             meta,
-            options: {},
+            options: { downloadFolder: prefs.downloadFolder },
           },
         });
         if (!response.ok) {
@@ -582,7 +618,7 @@ const chapterDownloadModule: GrandloadModule = {
     actionRow.appendChild(
       createActionButton('Tout', () => {
         state.items.forEach((item) => {
-          item.selected = true;
+          setItemSelection(item, true);
         });
         renderGrid();
         updateActions();
@@ -591,7 +627,7 @@ const chapterDownloadModule: GrandloadModule = {
     actionRow.appendChild(
       createActionButton('Aucune', () => {
         state.items.forEach((item) => {
-          item.selected = false;
+          setItemSelection(item, false);
         });
         renderGrid();
         updateActions();
@@ -600,7 +636,7 @@ const chapterDownloadModule: GrandloadModule = {
     actionRow.appendChild(
       createActionButton('Inverser', () => {
         state.items.forEach((item) => {
-          item.selected = !item.selected;
+          setItemSelection(item, !item.selected);
         });
         renderGrid();
         updateActions();
@@ -612,7 +648,7 @@ const chapterDownloadModule: GrandloadModule = {
         const lastSelected = selected.at(-1);
         const cursor = lastSelected ? state.items.indexOf(lastSelected) : 0;
         state.items.forEach((item, index) => {
-          item.selected = index >= cursor;
+          setItemSelection(item, index >= cursor);
         });
         renderGrid();
         updateActions();
@@ -624,7 +660,7 @@ const chapterDownloadModule: GrandloadModule = {
         const firstSelected = selected[0];
         const cursor = firstSelected ? state.items.indexOf(firstSelected) : state.items.length - 1;
         state.items.forEach((item, index) => {
-          item.selected = index <= cursor;
+          setItemSelection(item, index <= cursor);
         });
         renderGrid();
         updateActions();

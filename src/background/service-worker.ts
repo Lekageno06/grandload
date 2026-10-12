@@ -71,10 +71,12 @@ function scheduleDownloads(items: DownloadItem[], domain: string): void {
 
 console.info('Grandload service worker started.');
 
-chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
-  void suggestRequestedDownloadName(item, suggest);
-  return true;
-});
+if (typeof chrome.downloads.onDeterminingFilename?.addListener === 'function') {
+  chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
+    void suggestRequestedDownloadName(item, suggest);
+    return true;
+  });
+}
 
 chrome.runtime.onInstalled.addListener(() => {
   console.info('Grandload installed.');

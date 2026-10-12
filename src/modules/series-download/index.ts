@@ -377,7 +377,8 @@ const seriesDownloadModule: GrandloadModule = {
                         ? 'Annulé'
                         : 'En pause';
           const reason = child.error?.message ? ` · ${child.error.message}` : '';
-          childStatus.textContent = `${formatJobChapter(child)} : ${label}${reason}`;
+          const strategy = child.params.strategyUsed === 'html-parse' ? ' [sans onglet]' : child.params.strategyUsed === 'live-dom' ? ' [onglet inactif]' : '';
+          childStatus.textContent = `${formatJobChapter(child)} : ${label}${strategy}${reason}`;
           chapterStatuses.appendChild(childStatus);
         }
         card.appendChild(chapterStatuses);
@@ -485,6 +486,7 @@ const seriesDownloadModule: GrandloadModule = {
             adapterId: context.adapterId,
             packagerId: formatSelect.value,
             requestDelayMs: prefs.requestDelayMs,
+            downloadFolder: prefs.downloadFolder,
             chapters: selected.map(
               ({ selected: _selected, downloaded: _downloaded, ...chapter }) => chapter,
             ),

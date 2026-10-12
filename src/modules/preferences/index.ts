@@ -18,6 +18,12 @@ const preferencesModule: GrandloadModule = {
     heading.textContent = 'Préférences générales';
     panel.appendChild(heading);
 
+    const responsibleUse = document.createElement('p');
+    responsibleUse.className = 'small text-body-secondary mb-0';
+    responsibleUse.textContent =
+      'Respectez les droits d’auteur et les conditions d’utilisation des sites.';
+    panel.appendChild(responsibleUse);
+
     // 1. Format par défaut
     const formatRow = document.createElement('div');
     formatRow.className = 'd-grid gap-1';
@@ -72,14 +78,38 @@ const preferencesModule: GrandloadModule = {
     folderRow.className = 'd-grid gap-1';
     const folderLabel = document.createElement('label');
     folderLabel.className = 'small fw-bold';
-    folderLabel.textContent = 'Sous-dossier de téléchargement (RG-31, 704)';
+    folderLabel.textContent = 'Sous-dossier de téléchargement (RG-31, 32, 704)';
     const folderInput = document.createElement('input');
     folderInput.type = 'text';
     folderInput.className = 'form-control form-control-sm';
-    folderRow.append(folderLabel, folderInput);
+    const folderError = document.createElement('div');
+    folderError.className = 'small text-danger';
+    folderError.hidden = true;
+    folderRow.append(folderLabel, folderInput, folderError);
     panel.appendChild(folderRow);
 
-    // 5. Pré-exclusions automatiques
+    // 5. Stratégie d'acquisition (RG-205, Point 3)
+    const strategyRow = document.createElement('div');
+    strategyRow.className = 'd-grid gap-1';
+    const strategyLabel = document.createElement('label');
+    strategyLabel.className = 'small fw-bold';
+    strategyLabel.textContent = 'Stratégie d’acquisition (RG-205)';
+    const strategySelect = document.createElement('select');
+    strategySelect.className = 'form-select form-select-sm';
+    for (const opt of [
+      { value: 'auto', label: 'Auto (défaut selon le site)' },
+      { value: 'live-dom', label: 'Toujours onglet inactif (live-dom)' },
+      { value: 'html-parse', label: 'Toujours sans onglet (html-parse)' },
+    ]) {
+      const option = document.createElement('option');
+      option.value = opt.value;
+      option.textContent = opt.label;
+      strategySelect.appendChild(option);
+    }
+    strategyRow.append(strategyLabel, strategySelect);
+    panel.appendChild(strategyRow);
+
+    // 6. Pré-exclusions automatiques
     const autoExcludeRow = document.createElement('div');
     autoExcludeRow.className = 'form-check form-switch';
     const autoExcludeInput = document.createElement('input');
@@ -94,7 +124,7 @@ const preferencesModule: GrandloadModule = {
     autoExcludeRow.append(autoExcludeInput, autoExcludeLabel);
     panel.appendChild(autoExcludeRow);
 
-    // 6. Activation / désactivation des modules (RG-503, 704)
+    // 7. Activation / désactivation des modules (RG-503, 704)
     const modulesSection = document.createElement('div');
     modulesSection.className = 'd-grid gap-2 border-top pt-2';
     const modulesHeading = document.createElement('div');
@@ -121,9 +151,10 @@ const preferencesModule: GrandloadModule = {
       concurrencyInput.value = String(prefs.concurrency || 1);
       delayInput.value = String(prefs.requestDelayMs || 1500);
       folderInput.value = prefs.downloadFolder || 'Grandload';
+      strategySelect.value = prefs.acquisitionStrategy || 'auto';
       autoExcludeInput.checked = prefs.autoExclude ?? true;
 
-      const allModules = listModules().filter((m) => m.id !== 'preferences');
+      const allModules = listModules();
       modulesList.replaceChildren();
       for (const m of allModules) {
         const row = document.createElement('div');
@@ -132,14 +163,21 @@ const preferencesModule: GrandloadModule = {
         checkbox.type = 'checkbox';
         checkbox.className = 'form-check-input';
         checkbox.id = `mod-${m.id}`;
-        // Par défaut activé sauf si explicite false
-        checkbox.checked = prefs.modulesEnabled[m.id] !== false;
-        moduleToggles[m.id] = checkbox;
+
+        if (m.id === 'preferences') {
+          // Le module Préférences ne peut pas être désactivé (case grisée et message) (Point 4)
+          checkbox.checked = true;
+          checkbox.disabled = true;
+        } else {
+          // Par défaut activé sauf si explicite false
+          checkbox.checked = prefs.modulesEnabled[m.id] !== false;
+          moduleToggles[m.id] = checkbox;
+        }
 
         const label = document.createElement('label');
         label.className = 'form-check-label small';
         label.htmlFor = `mod-${m.id}`;
-        label.textContent = m.title;
+        label.textContent = m.id === 'preferences' ? `${m.title} (indispensable, non désactivable)` : m.title;
 
         row.append(checkbox, label);
         modulesList.appendChild(row);
@@ -148,10 +186,25 @@ const preferencesModule: GrandloadModule = {
 
     saveButton.addEventListener('click', () => {
       void (async () => {
+        folderError.hidden = true;
+        folderError.textContent = '';
+
+        const rawFolder = folderInput.value;
+        const { validateDownloadFolder } = await import('../../shared/url-utils');
+        const validation = validateDownloadFolder(rawFolder);
+        if (!validation.valid) {
+          folderError.textContent = validation.error ?? 'Dossier invalide.';
+          folderError.hidden = false;
+          folderInput.focus();
+          return;
+        }
+
         const concurrency = Math.min(6, Math.max(1, Number(concurrencyInput.value) || 1));
         const requestDelayMs = Math.max(0, Number(delayInput.value) || 1500);
-        const downloadFolder = folderInput.value.trim() || 'Grandload';
+        const { sanitizeDownloadFolder } = await import('../../shared/url-utils');
+        const downloadFolder = sanitizeDownloadFolder(rawFolder);
         const format = (formatSelect.value as 'cbz' | 'zip' | 'folder') || 'cbz';
+        const acquisitionStrategy = (strategySelect.value as 'auto' | 'live-dom' | 'html-parse') || 'auto';
         const autoExclude = autoExcludeInput.checked;
 
         const modulesEnabled: Record<string, boolean> = {};
@@ -164,6 +217,7 @@ const preferencesModule: GrandloadModule = {
           concurrency,
           requestDelayMs,
           downloadFolder,
+          acquisitionStrategy,
           autoExclude,
           modulesEnabled,
         });

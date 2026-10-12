@@ -20,6 +20,19 @@ describe('url-utils', () => {
   it('keeps the highest resolution candidate in a srcset', () => {
     expect(getBestSrcsetCandidate('a.jpg 1x, b.jpg 2x, c.jpg 3x')).toBe('c.jpg');
   });
+
+  it('rejects unsafe download folder paths and accepts sanitized relative names', async () => {
+    const { sanitizeDownloadFolder, validateDownloadFolder } = await import('../src/shared/url-utils');
+
+    expect(validateDownloadFolder('Mangas 2026').valid).toBe(true);
+    expect(sanitizeDownloadFolder('Mangas 2026')).toBe('Mangas 2026');
+    expect(validateDownloadFolder('%2e%2e/Downloads').valid).toBe(false);
+    expect(validateDownloadFolder('%2froot').valid).toBe(false);
+    expect(validateDownloadFolder('C:\\Downloads').valid).toBe(false);
+    expect(validateDownloadFolder('a'.repeat(151)).valid).toBe(false);
+    expect(validateDownloadFolder('Manga:Test').valid).toBe(false);
+    expect(sanitizeDownloadFolder('../escape')).toBe('Grandload');
+  });
 });
 
 describe('classification', () => {

@@ -7,6 +7,10 @@ import {
   evaluateMemorizedExclusion,
   processPageExclusions,
 } from '../src/modules/chapter-download/exclusions';
+import {
+  getChapterSelectionCounts,
+  getExclusionBadgeText,
+} from '../src/modules/chapter-download';
 
 describe('Exclusions (RG-106 & RG-107)', () => {
   describe('Pré-exclusions automatiques (RG-106)', () => {
@@ -69,7 +73,7 @@ describe('Exclusions (RG-106 & RG-107)', () => {
   });
 
   describe('Exclusions mémorisées (RG-107)', () => {
-    it('exclut la dernière planche si lastPage est mémorisé', () => {
+    it('suggère la dernière planche sans l’exclure automatiquement si lastPage est mémorisé', () => {
       const memory: ExclusionMemory = {
         lastPage: true,
         urlPatterns: [],
@@ -81,7 +85,8 @@ describe('Exclusions (RG-106 & RG-107)', () => {
       };
 
       const result = evaluateMemorizedExclusion(lastPage, 9, 10, memory);
-      expect(result.excluded).toBe(true);
+      expect(result.excluded).toBe(false);
+      expect(result.isSuggestedExclusion).toBe(true);
       expect(result.reason).toContain('dernière planche');
     });
 
@@ -100,7 +105,7 @@ describe('Exclusions (RG-106 & RG-107)', () => {
       expect(result.excluded).toBe(false);
     });
 
-    it('exclut selon un motif d\'URL mémorisé', () => {
+    it('suggère un motif d\'URL mémorisé sans appliquer l\'exclusion', () => {
       const memory: ExclusionMemory = {
         lastPage: false,
         urlPatterns: ['discord_join'],
@@ -112,7 +117,8 @@ describe('Exclusions (RG-106 & RG-107)', () => {
       };
 
       const result = evaluateMemorizedExclusion(page, 2, 10, memory);
-      expect(result.excluded).toBe(true);
+      expect(result.excluded).toBe(false);
+      expect(result.isSuggestedExclusion).toBe(true);
       expect(result.reason).toContain('discord_join');
     });
   });
@@ -138,7 +144,7 @@ describe('Exclusions (RG-106 & RG-107)', () => {
       expect(disabled[2]?.excluded).toBe(false);
     });
 
-    it('applique les exclusions mémorisées même si les pré-exclusions sont désactivées', () => {
+    it('retourne la dernière planche mémorisée comme suggestion incluse', () => {
       const pages: PageRef[] = [
         { index: 1, url: 'https://mangas-origines.fr/p1.webp', ext: 'webp' },
         { index: 2, url: 'https://mangas-origines.fr/p2.webp', ext: 'webp' },
@@ -147,8 +153,32 @@ describe('Exclusions (RG-106 & RG-107)', () => {
 
       const result = processPageExclusions(pages, mangasOriginesAdapter, false, memory);
       expect(result[0]?.excluded).toBe(false);
-      expect(result[1]?.excluded).toBe(true);
+      expect(result[1]?.excluded).toBe(false);
       expect(result[1]?.isSuggestedExclusion).toBe(true);
+      expect(result[1]?.reason).toContain('dernière planche');
+    });
+  });
+
+  it('keeps memorized exclusions included as visible suggestions and counts them as included', () => {
+    const page = { index: 10, url: 'https://example.test/page_010.jpg', ext: 'jpg' };
+    const [suggestion] = processPageExclusions(
+      [page],
+      undefined,
+      false,
+      { lastPage: true, urlPatterns: [] },
+    );
+    expect(suggestion?.excluded).toBe(false);
+    expect(suggestion?.isSuggestedExclusion).toBe(true);
+
+    const displayItem = {
+      selected: true,
+      excludeReason: suggestion?.reason,
+      isSuggestedExclusion: suggestion?.isSuggestedExclusion,
+    };
+    expect(getExclusionBadgeText(displayItem)).toContain('dernière planche');
+    expect(getChapterSelectionCounts([{ selected: true }, { selected: false }])).toEqual({
+      included: 1,
+      excluded: 1,
     });
   });
 });

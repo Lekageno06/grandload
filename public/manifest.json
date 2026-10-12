@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Grandload",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Extrait, filtre et télécharge liens, médias et chapitres de webtoons et mangas.",
   "permissions": ["activeTab", "scripting", "downloads", "storage", "offscreen"],
   "optional_host_permissions": ["https://*/*", "http://*/*"],

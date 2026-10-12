@@ -2,7 +2,9 @@ import '../adapters';
 import '../modules';
 import { send } from '../core/messaging';
 import { listModules } from '../core/registry';
+import { getPrefs } from '../core/storage';
 import type { PageContext } from '../core/types';
+import { getVisibleModules } from './module-visibility';
 
 declare const __BUILD_DATE__: string;
 
@@ -74,20 +76,9 @@ async function initializePopup(): Promise<void> {
   }
 
   const context = response.data as PageContext;
-  const { getPrefs } = await import('../core/storage');
   const prefs = await getPrefs();
 
-  // Filtrer les modules selon canHandle ET modulesEnabled (RG-503)
-  const applicableModules = listModules().filter((module) => {
-    if (!module.canHandle(context)) {
-      return false;
-    }
-    // Le module préférences reste toujours accessible
-    if (module.id === 'preferences') {
-      return true;
-    }
-    return prefs.modulesEnabled[module.id] !== false;
-  });
+  const applicableModules = getVisibleModules(listModules(), context, prefs);
 
   if (applicableModules.length === 0) {
     setStatus('Aucun module applicable sur cette page.');
@@ -134,6 +125,14 @@ async function initializePopup(): Promise<void> {
   });
 
   setStatus(`${applicableModules.length} module(s) applicable(s).`);
+}
+
+if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName === 'local' && 'prefs' in changes) {
+      void initializePopup();
+    }
+  });
 }
 
 void initializePopup();

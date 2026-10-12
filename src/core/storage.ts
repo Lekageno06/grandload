@@ -3,6 +3,8 @@ import { GrandloadError } from './errors';
 
 export type StorageAreaName = 'local' | 'session';
 
+export type AcquisitionStrategy = 'auto' | 'live-dom' | 'html-parse';
+
 export interface Prefs {
   format: 'zip' | 'cbz' | 'folder';
   concurrency: number;
@@ -13,6 +15,8 @@ export interface Prefs {
   autoExclude: boolean;
   /** Sous-dossier de téléchargement personnalisé (par défaut Grandload) (RG-704). */
   downloadFolder: string;
+  /** Stratégie d'acquisition : 'auto' (défaut) / 'live-dom' (toujours onglet inactif) / 'html-parse' (toujours sans onglet) (RG-205). */
+  acquisitionStrategy: AcquisitionStrategy;
 }
 
 /** Exclusions mémorisées par site (RG-107). Stockées dans exclusions:<adapterId>. */
@@ -51,6 +55,7 @@ export const DEFAULT_PREFS: Prefs = {
   autoOpenDownloads: false,
   autoExclude: true,
   downloadFolder: 'Grandload',
+  acquisitionStrategy: 'auto',
 };
 
 type StorageAreaLike = {

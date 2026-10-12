@@ -2,7 +2,6 @@ import { GrandloadError } from '../core/errors';
 import { getAdapter } from '../core/registry';
 import {
   acquireSeriesTemporaryTabLock,
-  getExclusions,
   getJobs,
   getPrefs,
   readStorage,
@@ -13,7 +12,7 @@ import {
 } from '../core/storage';
 import type { ChapterRef, Job, PageRef } from '../core/types';
 import type { MessagePayloadMap, MessageResponse } from '../core/messaging';
-import { processPageExclusions } from '../modules/chapter-download/exclusions';
+import { sanitizeDownloadFolder, validateDownloadFolder } from '../shared/url-utils';
 import {
   cancelChapterJob,
   isTerminal,
@@ -29,6 +28,7 @@ export type SeriesJobParams = {
   adapterId: string;
   packagerId: 'cbz' | 'zip' | 'folder';
   requestDelayMs: number;
+  downloadFolder: string;
   chapters: ChapterRef[];
   currentChildId?: string;
   currentTabId?: number;
@@ -50,6 +50,7 @@ type SeriesChapterParams = {
   pages?: PageRef[];
   options?: Record<string, unknown>;
   requestDelayMs: number;
+  downloadFolder: string;
 };
 
 type HistoryEntry = { number: number; label: string; url: string; completedAt: number };
@@ -107,6 +108,16 @@ function seriesParams(value: Record<string, unknown>): SeriesJobParams {
     );
   }
 
+  const requestedFolder = value.downloadFolder;
+  if (requestedFolder !== undefined && typeof requestedFolder !== 'string') {
+    throw new GrandloadError('INVALID_URL', 'Le dossier de destination doit être un nom relatif.');
+  }
+  const downloadFolder = typeof requestedFolder === 'string' ? requestedFolder : 'Grandload';
+  const folderValidation = validateDownloadFolder(downloadFolder);
+  if (!folderValidation.valid) {
+    throw new GrandloadError('INVALID_URL', folderValidation.error ?? 'Dossier de destination invalide.');
+  }
+
   return {
     seriesId: value.seriesId,
     seriesTitle: value.seriesTitle,
@@ -117,6 +128,7 @@ function seriesParams(value: Record<string, unknown>): SeriesJobParams {
       typeof value.requestDelayMs === 'number' && value.requestDelayMs >= 0
         ? value.requestDelayMs
         : 1500,
+    downloadFolder: sanitizeDownloadFolder(downloadFolder),
     chapters: [...chapters].sort((left, right) => left.number - right.number),
   };
 }
@@ -141,6 +153,7 @@ export async function createSeriesJob(
       packagerId: params.packagerId,
       chapter,
       requestDelayMs: params.requestDelayMs,
+      downloadFolder: params.downloadFolder,
       options: {},
     } satisfies SeriesChapterParams,
     progress: { done: 0, total: 0 },
@@ -505,7 +518,7 @@ function createArchiveMeta(parent: Job, chapter: ChapterRef): Record<string, unk
   };
 }
 
-async function readChapterPagesHtmlParse(url: string, adapterId: string): Promise<PageRef[]> {
+export async function readChapterPagesHtmlParse(url: string, adapterId: string): Promise<PageRef[]> {
   const adapter = getAdapter(adapterId);
   if (!adapter) {
     throw new GrandloadError('UNKNOWN', 'Adaptateur non trouvé.');
@@ -517,6 +530,9 @@ async function readChapterPagesHtmlParse(url: string, adapterId: string): Promis
   }
 
   const html = await response.text();
+  if (typeof DOMParser === 'undefined') {
+    throw new GrandloadError('UNKNOWN', 'DOMParser non disponible dans cet environnement.');
+  }
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, 'text/html');
 
@@ -525,25 +541,67 @@ async function readChapterPagesHtmlParse(url: string, adapterId: string): Promis
   baseElem.href = url;
   doc.head?.appendChild(baseElem);
 
-  return adapter.readChapterPages(doc);
+  const pages = adapter.readChapterPages(doc);
+  const expectedPageCount = adapter.countChapterPageElements?.(doc);
+  const validPages = pages.filter((page) => page.url && page.url.trim().length > 0 && !/^about:blank$/i.test(page.url));
+  if (
+    validPages.length === 0 ||
+    validPages.length < pages.length ||
+    (expectedPageCount !== undefined && validPages.length < expectedPageCount)
+  ) {
+    return [];
+  }
+
+  return validPages;
 }
 
-async function readChapterPagesForSeries(parent: Job, child: Job): Promise<PageRef[]> {
+export function chooseAcquisitionStrategy(
+  adapterStrategy: 'live-dom' | 'html-parse',
+  userStrategy: 'auto' | 'live-dom' | 'html-parse',
+): 'live-dom' | 'html-parse' {
+  return adapterStrategy === 'html-parse' && userStrategy !== 'live-dom'
+    ? 'html-parse'
+    : 'live-dom';
+}
+
+export async function readChapterPagesForSeries(
+  parent: Job,
+  child: Job,
+): Promise<{ pages: PageRef[]; strategyUsed: 'html-parse' | 'live-dom' }> {
   const childParams = child.params as unknown as SeriesChapterParams;
   const adapter = getAdapter(childParams.adapterId);
+  if (!adapter) {
+    throw new GrandloadError('ADAPTER_STRUCTURE', `Adaptateur introuvable : ${childParams.adapterId}`);
+  }
+  const prefs = await getPrefs();
+  const userStrategy = prefs.acquisitionStrategy || 'auto';
+  const selectedStrategy = chooseAcquisitionStrategy(adapter.acquisition, userStrategy);
+  const shouldTryHtmlParse = selectedStrategy === 'html-parse';
 
-  if (adapter?.acquisition === 'html-parse') {
+  if (userStrategy === 'html-parse' && adapter.acquisition === 'live-dom') {
+    console.info(
+      `[Grandload] Chapitre ${childParams.chapter.number} : l’adaptateur impose live-dom; html-parse ignoré.`,
+    );
+  }
+
+  if (shouldTryHtmlParse) {
     try {
       const pages = await readChapterPagesHtmlParse(childParams.chapter.url, childParams.adapterId);
+      // Règle 2 : repli si 0 planche ou images sans URL
       if (pages.length > 0) {
-        return pages;
+        console.info(`[Grandload] Chapitre ${childParams.chapter.number} acquis via html-parse (sans onglet)`);
+        return { pages, strategyUsed: 'html-parse' };
       }
-    } catch {
-      // En cas d'échec du fetch statique ou d'images non présentes, repli sur live-dom
+      console.info(`[Grandload] Chapitre ${childParams.chapter.number} : html-parse n'a retourné aucune planche valide, repli automatique sur live-dom.`);
+    } catch (error) {
+      console.info(`[Grandload] Chapitre ${childParams.chapter.number} : html-parse a échoué (${error instanceof Error ? error.message : String(error)}), repli automatique sur live-dom.`);
     }
   }
 
-  return await readChapterInTemporaryTab(parent, child);
+  // Repli automatique ou stratégie par défaut sur live-dom
+  const pages = await readChapterInTemporaryTab(parent, child);
+  console.info(`[Grandload] Chapitre ${childParams.chapter.number} acquis via live-dom (onglet inactif)`);
+  return { pages, strategyUsed: 'live-dom' };
 }
 
 async function processSeriesChild(parentId: string, childId: string): Promise<void> {
@@ -570,8 +628,11 @@ async function processSeriesChild(parentId: string, childId: string): Promise<vo
       state: 'running',
       progress: { done: 0, total: 1 },
     }));
+    let strategyUsed: 'html-parse' | 'live-dom' = 'live-dom';
     try {
-      pages = await readChapterPagesForSeries(parent, child);
+      const acquisitionResult = await readChapterPagesForSeries(parent, child);
+      pages = acquisitionResult.pages;
+      strategyUsed = acquisitionResult.strategyUsed;
     } catch (error) {
       const latestParent = (await getJobs())[parentId];
       if (latestParent?.state === 'cancelled') return;
@@ -611,32 +672,13 @@ async function processSeriesChild(parentId: string, childId: string): Promise<vo
       return;
     }
 
-    // Application des pré-exclusions et exclusions mémorisées pour la série (RG-106, RG-107)
-    const [prefs, memory] = await Promise.all([
-      getPrefs(),
-      getExclusions(seriesParams.adapterId),
-    ]);
-    const adapter = getAdapter(seriesParams.adapterId);
-    const processed = processPageExclusions(
-      extractedPages,
-      adapter,
-      prefs.autoExclude ?? true,
-      memory,
-    );
-    // Filtrer les planches exclues
-    const activePages = processed.filter((p) => !p.excluded);
-    if (activePages.length > 0) {
-      extractedPages = activePages.map((p, i) => {
-        const ref: PageRef = {
-          index: i + 1,
-          url: p.url,
-          ext: p.ext,
-        };
-        if (p.width !== undefined) ref.width = p.width;
-        if (p.height !== undefined) ref.height = p.height;
-        return ref;
-      });
-    }
+    await updateJob(childId, (current) => ({
+      ...current,
+      params: {
+        ...current.params,
+        strategyUsed,
+      },
+    }));
 
     pages = extractedPages;
 
@@ -660,7 +702,7 @@ async function processSeriesChild(parentId: string, childId: string): Promise<vo
       pages: extractedPages,
       packagerId: seriesParams.packagerId,
       meta: createArchiveMeta(parent, chapter),
-      options: {},
+      options: { downloadFolder: seriesParams.downloadFolder },
     };
     await updateJob(childId, (current) => ({
       ...current,

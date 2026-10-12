@@ -114,7 +114,8 @@ function buildImageSources(image: HTMLImageElement): string[] {
 
 const mangasOriginesAdapter: SiteAdapter = {
   id: 'mangas-origines',
-  acquisition: 'html-parse',
+  acquisition: 'live-dom',
+  countChapterPageElements: (doc) => getReaderImages(doc).length,
   matches: (url) => url.hostname.toLowerCase() === 'mangas-origines.fr',
   excludePatterns: [
     /(?:banner|banniere|discord|logo|avatar|credit|recrutement|promo)/iu,
