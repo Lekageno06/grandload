@@ -71,6 +71,23 @@
   bottom: 12px;
   z-index: 5;
 }
+.ui-gallery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  backdrop-filter: blur(8px);
+}
+.ui-gallery-actions__summary {
+  flex: 1 1 180px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
 .ui-lightbox {
   max-width: min(94vw, 1100px);
   max-height: 94vh;

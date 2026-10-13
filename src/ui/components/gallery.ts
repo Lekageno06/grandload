@@ -131,6 +131,12 @@ export class ImageGallery {
     return filteredItems(this.items, this.state, this.ordered);
   }
 
+  selectFiltered(): void {
+    for (const item of this.filtered) item.selected = true;
+    this.render();
+    this.onSelectionChange?.(this.items.filter((entry) => entry.selected !== false));
+  }
+
   private render(): void {
     this.observer?.disconnect();
     this.pendingImages.length = 0;

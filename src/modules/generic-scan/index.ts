@@ -291,6 +291,9 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
   imageSection.hidden = true;
   wrapper.appendChild(imageSection);
   let gallery: ImageGallery | undefined;
+  let gallerySummary: HTMLElement | undefined;
+  let gallerySelectAll: HTMLButtonElement | undefined;
+  let galleryDownload: HTMLButtonElement | undefined;
 
   const renderSkeletons = (): void => {
     imageSection.replaceChildren();
@@ -347,6 +350,9 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
     if (imageItems.length === 0) {
       imageSection.hidden = true;
       gallery = undefined;
+      gallerySummary = undefined;
+      gallerySelectAll = undefined;
+      galleryDownload = undefined;
       return;
     }
     imageSection.hidden = false;
@@ -370,6 +376,24 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
       },
     });
     imageSection.append(toolbar.element, gallery.element);
+
+    gallerySummary = document.createElement('span');
+    gallerySummary.className = 'ui-gallery-actions__summary';
+    gallerySelectAll = document.createElement('button');
+    gallerySelectAll.type = 'button';
+    gallerySelectAll.className = 'ui-button ui-button--secondary';
+    gallerySelectAll.textContent = 'Tout sélectionner';
+    galleryDownload = document.createElement('button');
+    galleryDownload.type = 'button';
+    galleryDownload.className = 'ui-button ui-button--primary';
+    galleryDownload.textContent = 'Télécharger';
+    const galleryActions = document.createElement('div');
+    galleryActions.className = 'ui-selection-bar ui-gallery-actions';
+    galleryActions.append(gallerySummary, gallerySelectAll, galleryDownload);
+    gallery.element.appendChild(galleryActions);
+
+    gallerySelectAll.addEventListener('click', () => gallery?.selectFiltered());
+    galleryDownload.addEventListener('click', () => downloadButton.click());
   };
 
   const updateButtons = (): void => {
@@ -385,6 +409,12 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
     archiveEstimate.textContent = selectedImages.length
       ? `${selectedImages.length} image(s) sélectionnée(s) pour l’archive.`
       : 'Le format et le nom s’appliquent aux images sélectionnées.';
+    if (gallerySummary) {
+      const visibleCount = gallery?.filtered.length ?? 0;
+      gallerySummary.textContent = `${selectedImages.length} sélectionnée(s) · ${visibleCount} affichée(s)`;
+    }
+    if (gallerySelectAll) gallerySelectAll.disabled = (gallery?.filtered.length ?? 0) === 0;
+    if (galleryDownload) galleryDownload.disabled = selectedCount === 0;
   };
 
   const renderBadges = (): void => {

@@ -79,4 +79,22 @@ describe('ImageGallery', () => {
     expect([...gallery.element.querySelectorAll<HTMLElement>('.ui-gallery-card')]
       .map((card) => card.dataset.itemId)).toEqual(['large']);
   });
+
+  it('sélectionne toutes les vignettes actuellement filtrées', () => {
+    const selected: string[][] = [];
+    const gallery = new ImageGallery(
+      [
+        { id: '1', url: 'https://example.test/1.jpg', label: 'Visible', ext: 'jpg' },
+        { id: '2', url: 'https://example.test/2.jpg', label: 'Masquée', ext: 'jpg', selected: false },
+      ],
+      { onSelectionChange: (items) => selected.push(items.map((item) => item.id)) },
+    );
+
+    gallery.setFilters({ search: 'Visible' });
+    gallery.selectFiltered();
+
+    expect(selected.at(-1)).toEqual(['1']);
+    expect(gallery.element.querySelector('[data-item-id="1"] [aria-pressed="true"]')).not.toBeNull();
+    expect(gallery.element.querySelector('[data-item-id="2"] [aria-pressed="true"]')).toBeNull();
+  });
 });
