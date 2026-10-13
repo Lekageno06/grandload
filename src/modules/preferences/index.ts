@@ -6,6 +6,7 @@ import {
   chooseAndStoreCustomFolder,
   getCustomFolderHandle,
   isCustomFolderAvailable,
+  isDirectoryPickerCancellation,
 } from '../../destinations/custom-folder';
 
 const preferencesModule: GrandloadModule = {
@@ -146,6 +147,7 @@ const preferencesModule: GrandloadModule = {
       chooseFolderButton.disabled = true;
     }
     chooseFolderButton.addEventListener('click', () => {
+      chooseFolderButton.disabled = true;
       void chooseAndStoreCustomFolder()
         .then((handle) => {
           customFolderInput.value = handle.name;
@@ -153,7 +155,12 @@ const preferencesModule: GrandloadModule = {
           destinationMode.value = 'custom-folder';
         })
         .catch((error: unknown) => {
-          customFolderStatus.textContent = error instanceof Error ? error.message : 'Sélection annulée.';
+          customFolderStatus.textContent = isDirectoryPickerCancellation(error)
+            ? 'Sélection annulée.'
+            : error instanceof Error ? error.message : 'Sélection impossible.';
+        })
+        .finally(() => {
+          chooseFolderButton.disabled = !customFolderAvailable;
         });
     });
 

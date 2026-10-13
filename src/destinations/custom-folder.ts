@@ -53,6 +53,15 @@ export function isCustomFolderAvailable(): boolean {
   return typeof (globalThis as PickerGlobal).showDirectoryPicker === 'function';
 }
 
+export function isDirectoryPickerCancellation(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  const candidate = error as { name?: unknown; message?: unknown };
+  return (
+    candidate.name === 'AbortError' ||
+    (typeof candidate.message === 'string' && /user aborted (a request|the request)/iu.test(candidate.message))
+  );
+}
+
 export async function chooseAndStoreCustomFolder(): Promise<DirectoryHandleLike> {
   const picker = (globalThis as PickerGlobal).showDirectoryPicker;
   if (!picker) throw new Error('Non disponible dans ce navigateur.');

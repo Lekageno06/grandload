@@ -3,6 +3,7 @@ import {
   chooseAndStoreCustomFolder,
   getCustomFolderHandle,
   isCustomFolderAvailable,
+  isDirectoryPickerCancellation,
 } from './custom-folder';
 
 export function createDestinationPicker(initial: DestinationSettings): {
@@ -52,13 +53,19 @@ export function createDestinationPicker(initial: DestinationSettings): {
     });
   }
   choose.addEventListener('click', () => {
+    choose.disabled = true;
     void chooseAndStoreCustomFolder()
       .then((handle) => {
         mode.value = 'custom-folder';
         status.textContent = `Dossier : ${handle.name}`;
       })
       .catch((error: unknown) => {
-        status.textContent = error instanceof Error ? error.message : 'Sélection annulée.';
+        status.textContent = isDirectoryPickerCancellation(error)
+          ? 'Sélection annulée.'
+          : error instanceof Error ? error.message : 'Sélection impossible.';
+      })
+      .finally(() => {
+        choose.disabled = !isCustomFolderAvailable();
       });
   });
   element.append(legend, mode, template, choose, status);

@@ -6,7 +6,13 @@ import {
   validateDestinationTemplate,
 } from '../src/destinations/template';
 import { getDestination, registerDestination } from '../src/destinations/registry';
-import { writeBlobToDirectory, type DirectoryHandleLike, type FileHandleLike, type WritableFileLike } from '../src/destinations/custom-folder';
+import {
+  isDirectoryPickerCancellation,
+  writeBlobToDirectory,
+  type DirectoryHandleLike,
+  type FileHandleLike,
+  type WritableFileLike,
+} from '../src/destinations/custom-folder';
 
 describe('destinations', () => {
   it('développe les jetons dans des segments nettoyés', () => {
@@ -34,6 +40,11 @@ describe('destinations', () => {
     const writer = { id: 'test', writeArchive: async () => undefined };
     expect(registerDestination(writer)).toBe(writer);
     expect(getDestination('test')).toBe(writer);
+  });
+
+  it('classe l’annulation native du sélecteur sans exposer le message navigateur', () => {
+    expect(isDirectoryPickerCancellation({ name: 'AbortError', message: 'The user aborted a request.' })).toBe(true);
+    expect(isDirectoryPickerCancellation(new Error('Permission denied.'))).toBe(false);
   });
 
   it('écrit dans des sous-dossiers, ajoute un suffixe et ne conserve pas une écriture interrompue', async () => {
