@@ -274,7 +274,7 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
   wrapper.appendChild(badges);
 
   const list = document.createElement('ul');
-  list.className = 'ui-stack';
+  list.className = 'ui-resource-list';
   wrapper.appendChild(list);
 
   const imageSection = document.createElement('section');
@@ -392,7 +392,7 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
 
   const renderList = (): void => {
     const filtered = filterScanItems(state.items, state.filters);
-    list.innerHTML = '';
+    list.replaceChildren();
 
     if (filtered.length === 0) {
       emptyMessage.hidden = false;
@@ -403,27 +403,28 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
 
     for (const item of filtered) {
       const row = document.createElement('li');
-      row.className = 'list-group-item d-flex justify-content-between align-items-start gap-3';
+      row.className = 'ui-resource-item';
 
       const labelBox = document.createElement('div');
-      labelBox.className = 'flex-grow-1';
+      labelBox.className = 'ui-resource-item__content';
       const title = document.createElement('div');
-      title.className = 'fw-semibold';
+      title.className = 'ui-resource-item__title';
       title.textContent = item.label;
       const meta = document.createElement('small');
-      meta.className = 'text-muted';
+      meta.className = 'ui-resource-item__meta';
       meta.textContent = `${item.type} · ${item.ext || 'no ext'} · ${item.source}`;
       labelBox.appendChild(title);
       labelBox.appendChild(meta);
       if (item.type === 'image' && item.provenance) {
         const provenance = document.createElement('span');
-        provenance.className = 'badge text-bg-secondary align-self-start';
+        provenance.className = 'ui-badge ui-badge--neutral';
         provenance.textContent = `Provenance : ${item.provenance}`;
         labelBox.appendChild(provenance);
       }
 
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
+      checkbox.className = 'ui-resource-item__check';
       checkbox.checked = state.selectedIds.has(item.id);
       checkbox.addEventListener('change', () => {
         if (checkbox.checked) {
