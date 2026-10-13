@@ -4,6 +4,7 @@ import { getJobs, setJobs } from '../src/core/storage';
 import type { Job } from '../src/core/types';
 import {
   detectDownloadFilenameWarning,
+  buildChapterDownloadFilename,
   isStaleRunningJob,
   protectTerminalJobUpdate,
   recoverRunningJobs,
@@ -98,6 +99,22 @@ describe('chapter job orchestration', () => {
       requested: 'Grandload/Series/Series - Chapitre 012.cbz',
       actual: 'C:\\Downloads\\Grandload\\Series\\Series - Chapitre 012.zip',
     });
+  });
+
+  it('uses a sanitized custom archive name while keeping the archive pipeline path', () => {
+    expect(
+      buildChapterDownloadFilename(
+        {
+          series: 'Liens et médias',
+          chapter: { number: 0, label: 'Scan de la page', url: 'https://example.test' },
+          pageCount: 2,
+          sourceUrl: 'https://example.test',
+        },
+        '.zip',
+        'Grandload',
+        '../ma|page',
+      ),
+    ).toBe('Grandload/Liens et médias/._ma_page.zip');
   });
 
   it('does not report a warning when Chrome returns the requested relative path', () => {

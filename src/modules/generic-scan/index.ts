@@ -6,7 +6,7 @@ import type { GalleryItem } from '../../ui/components/gallery';
 import { exportCsv, exportJson, exportTxt } from './exports';
 import { filterScanItems, getTypeCounts } from './filters';
 import type { ScanFilterState, ScanItem } from './types';
-import { getScanStateMessage, type ScanViewState } from './state';
+import { archiveWarning, getScanStateMessage, type ScanViewState } from './state';
 
 const typeOptions = [
   'all',
@@ -202,6 +202,34 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
     actionRow.appendChild(button);
   }
 
+  const downloadSheet = document.createElement('section');
+  downloadSheet.className = 'ui-download-sheet border rounded p-3 d-grid gap-2';
+  const downloadSheetTitle = document.createElement('strong');
+  downloadSheetTitle.textContent = 'Téléchargement';
+  const formatSelect = document.createElement('select');
+  formatSelect.className = 'form-select form-select-sm';
+  for (const [value, label] of [
+    ['zip', 'ZIP'],
+    ['cbz', 'CBZ'],
+    ['folder', 'Dossier'],
+  ] as const) {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = label;
+    formatSelect.appendChild(option);
+  }
+  const archiveName = document.createElement('input');
+  archiveName.type = 'text';
+  archiveName.className = 'form-control form-control-sm';
+  archiveName.value = 'grandload-export';
+  archiveName.maxLength = 150;
+  archiveName.placeholder = 'Nom de l’archive';
+  const archiveEstimate = document.createElement('small');
+  archiveEstimate.className = 'text-muted';
+  archiveEstimate.textContent = 'Le format et le nom s’appliquent aux images sélectionnées.';
+  downloadSheet.append(downloadSheetTitle, formatSelect, archiveName, archiveEstimate);
+  wrapper.appendChild(downloadSheet);
+
   const badges = document.createElement('div');
   badges.className = 'd-flex flex-wrap gap-2';
   wrapper.appendChild(badges);
@@ -239,7 +267,11 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
     const toolbar = new ImageToolbar((filters) => gallery?.setFilters(filters));
     gallery = new ImageGallery(imageItems, {
       onSelectionChange: (selected) => {
-        state.selectedIds = new Set(selected.map((item) => item.id));
+        const imageIds = new Set(imageItems.map((item) => item.id));
+        state.selectedIds = new Set([
+          ...Array.from(state.selectedIds).filter((id) => !imageIds.has(id)),
+          ...selected.map((item) => item.id),
+        ]);
         updateButtons();
       },
     });
@@ -253,6 +285,12 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
     csvButton.disabled = selectedCount === 0;
     jsonButton.disabled = selectedCount === 0;
     txtButton.disabled = selectedCount === 0;
+    const selectedImages = state.items.filter(
+      (item) => item.type === 'image' && state.selectedIds.has(item.id),
+    );
+    archiveEstimate.textContent = selectedImages.length
+      ? `${selectedImages.length} image(s) sélectionnée(s) pour l’archive.`
+      : 'Le format et le nom s’appliquent aux images sélectionnées.';
   };
 
   const renderBadges = (): void => {
@@ -374,6 +412,43 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
       return;
     }
 
+    const imageSelection = selected.filter((item) => item.type === 'image');
+    const warning = archiveWarning(imageSelection);
+    if (warning) {
+      const confirmed = window.confirm(`${warning} Confirmez le téléchargement ?`);
+      if (!confirmed) return;
+    }
+
+    if (imageSelection.length > 0) {
+      const pages = imageSelection.map((item, index) => ({
+        index,
+        url: item.url,
+        ext: item.ext || 'jpg',
+        ...(item.width ? { width: item.width } : {}),
+        ...(item.height ? { height: item.height } : {}),
+      }));
+      const response = await send('JOB_CREATE', {
+        kind: 'chapter',
+        params: {
+          pages,
+          packagerId: formatSelect.value as 'cbz' | 'zip' | 'folder',
+          meta: {
+            series: 'Liens et médias',
+            chapter: { number: 0, label: 'Scan de la page', url: ctx.url },
+            pageCount: pages.length,
+            sourceUrl: ctx.url,
+          },
+          options: { archiveName: archiveName.value },
+        },
+      });
+      api.setStatus?.(
+        response.ok
+          ? `Archive en préparation : ${pages.length} image(s).`
+          : response.error?.message ?? 'Le téléchargement a échoué.',
+      );
+      return;
+    }
+
     if (selected.length > 50) {
       const confirmed = window.confirm('Vous allez télécharger plus de 50 fichiers. Confirmez ?');
       if (!confirmed) {
@@ -485,7 +560,7 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
 
 export const genericScanModule: GrandloadModule = {
   id: 'generic-scan',
-  title: 'Scan générique',
+  title: 'Liens et médias',
   priority: 10,
   canHandle: (ctx: PageContext) => /^https?:\/\//.test(ctx.url),
   mountPanel: (root: HTMLElement, ctx: PageContext, api: ModuleApi): void => {

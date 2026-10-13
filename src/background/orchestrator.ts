@@ -149,6 +149,7 @@ export function buildChapterDownloadFilename(
   meta: ArchiveMeta,
   extension: string,
   downloadFolder = 'Grandload',
+  archiveName?: string,
 ): string {
   const folderValidation = validateDownloadFolder(downloadFolder);
   if (!folderValidation.valid) {
@@ -156,6 +157,9 @@ export function buildChapterDownloadFilename(
   }
   const sanitizedFolder = sanitizeDownloadFolder(downloadFolder);
   const root = sanitizedFolder === 'Grandload' ? 'Grandload' : `Grandload/${sanitizedFolder}`;
+  if (archiveName) {
+    return `${root}/${sanitizeFileName(meta.series, 'Serie')}/${sanitizeFileName(archiveName)}${extension}`;
+  }
   const series = sanitizeFileName(meta.series, 'Série');
   const chapterNumber = meta.chapter.number;
   const whole = String(Math.trunc(chapterNumber)).padStart(3, '0');
@@ -272,18 +276,24 @@ function artifactDownloads(
   meta: ArchiveMeta,
   extension: string,
   downloadFolder: string,
+  archiveName?: string,
 ): Array<{ blobUrl: string; filename: string }> {
   if (result.kind === 'archive') {
-    return [{ blobUrl: result.blobUrl, filename: buildChapterDownloadFilename(meta, extension, downloadFolder) }];
+    return [{
+      blobUrl: result.blobUrl,
+      filename: buildChapterDownloadFilename(meta, extension, downloadFolder, archiveName),
+    }];
   }
 
   const sanitizedFolder = sanitizeDownloadFolder(downloadFolder);
   const root = sanitizedFolder === 'Grandload' ? 'Grandload' : `Grandload/${sanitizedFolder}`;
   const series = sanitizeFileName(meta.series, 'Série');
-  const chapterNumber = String(meta.chapter.number);
+  const archiveDirectory = archiveName
+    ? sanitizeFileName(archiveName, series)
+    : `Chapitre ${String(meta.chapter.number)}`;
   return result.files.map((file) => ({
     blobUrl: file.blobUrl,
-    filename: `${root}/${series}/Chapitre ${chapterNumber}/${file.name}`,
+    filename: `${root}/${series}/${archiveDirectory}/${file.name}`,
   }));
 }
 
@@ -460,7 +470,15 @@ export async function runChapterJob(jobId: string): Promise<void> {
 
     const folderValue = params.options.downloadFolder;
     const downloadFolder = typeof folderValue === 'string' ? folderValue : 'Grandload';
-    for (const artifact of artifactDownloads(result, params.meta, packager.extension, downloadFolder)) {
+    const archiveNameValue = params.options.archiveName;
+    const archiveName = typeof archiveNameValue === 'string' ? archiveNameValue : undefined;
+    for (const artifact of artifactDownloads(
+      result,
+      params.meta,
+      packager.extension,
+      downloadFolder,
+      archiveName,
+    )) {
       const current = (await getJobs())[jobId];
       if (!current || current.state === 'cancelled') {
         return;

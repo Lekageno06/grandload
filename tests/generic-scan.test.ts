@@ -4,7 +4,11 @@ import { classifyResource } from '../src/modules/generic-scan/classify';
 import { exportCsv } from '../src/modules/generic-scan/exports';
 import { filterScanItems } from '../src/modules/generic-scan/filters';
 import { readPageAssets } from '../src/content/dom-reader';
-import { getScanStateMessage } from '../src/modules/generic-scan/state';
+import {
+  archiveWarning,
+  estimateArchiveBytes,
+  getScanStateMessage,
+} from '../src/modules/generic-scan/state';
 import { genericAdapter } from '../src/adapters/generic';
 import type { ScanItem } from '../src/modules/generic-scan/types';
 import { JSDOM } from 'jsdom';
@@ -18,6 +22,21 @@ describe('états du scan générique', () => {
     expect(getScanStateMessage('empty')).toBe('Aucun résultat.');
     expect(getScanStateMessage('error')).toBe('Erreur pendant le scan.');
     expect(getScanStateMessage('permission')).toContain('Autorisation requise');
+  });
+
+  it('avertit au-delà de 50 fichiers ou 300 Mo estimés', () => {
+    const items: ScanItem[] = Array.from({ length: 51 }, (_, index) => ({
+      id: String(index),
+      url: `https://example.test/${index}.jpg`,
+      type: 'image',
+      ext: 'jpg',
+      label: String(index),
+      source: 'img',
+    }));
+    expect(archiveWarning(items)).toContain('50');
+    const large: ScanItem = { ...items[0]!, width: 10000, height: 10000 };
+    expect(estimateArchiveBytes([large])).toBe(400000000);
+    expect(archiveWarning([large])).toContain('300');
   });
 });
 
