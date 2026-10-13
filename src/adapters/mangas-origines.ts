@@ -29,6 +29,20 @@ function normalizeChapterLabel(value: string): string {
     .trim();
 }
 
+function cleanWorkTitle(value: string): string {
+  return value.replace(/\s+/gu, ' ').trim().replace(/^Lire\s+/iu, '').replace(/\s+(?:Scan\s+FR|Scan)\s*$/iu, '').replace(/\s*-\s*Mangas?\s+Origines\s*$/iu, '').trim();
+}
+
+function readWorkTitle(doc: Document): string {
+  const candidates = [
+    doc.querySelector('.ori-lec-titre')?.textContent,
+    doc.querySelector('[itemprop="name"]')?.textContent,
+    doc.querySelector('meta[property="og:title"]')?.getAttribute('content'),
+  ];
+  const title = candidates.map((value) => (value ? cleanWorkTitle(value) : '')).find((value) => value && !/chapitre\s+\d/iu.test(value));
+  return title || cleanWorkTitle(doc.title) || 'Série';
+}
+
 function collectChapters(
   anchors: HTMLAnchorElement[],
   base: string,
@@ -154,7 +168,7 @@ const mangasOriginesAdapter: SiteAdapter = {
         : collectChapters(Array.from(doc.querySelectorAll<HTMLAnchorElement>('a[href]')), base);
 
     return {
-      title: doc.title || 'Mangas Origines',
+      title: readWorkTitle(doc),
       chapters: Array.from(chapters.values())
         .map(({ number, labels, url }) => ({
           number,
@@ -163,6 +177,10 @@ const mangasOriginesAdapter: SiteAdapter = {
         }))
         .sort((left, right) => left.number - right.number),
     };
+  },
+  readChapterMeta: (doc, url) => {
+    const number = getChapterNumberFromUrl(url) ?? 0;
+    return { series: readWorkTitle(doc), number, label: `Chapitre ${number}` };
   },
   readChapterPages: (doc) => {
     const pages = getReaderImages(doc)

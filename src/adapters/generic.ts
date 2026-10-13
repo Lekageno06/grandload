@@ -149,6 +149,14 @@ const genericAdapter: SiteAdapter = {
       chapters: Array.from(chapters.values()).sort((left, right) => left.number - right.number),
     };
   },
+  readChapterMeta: (doc, url) => {
+    const parsed = new URL(url);
+    const match = parsed.pathname.match(/(?:chapitre|chapter)[-/](\d+)(?:[-.]([0-9]+))?/iu);
+    const number = match?.[1] ? Number(match[1]) + (match[2] ? Number(`0.${match[2]}`) : 0) : 0;
+    const cleaned = (doc.querySelector('[itemprop="name"]')?.textContent || doc.title || 'Série')
+      .replace(/\s+/gu, ' ').trim().replace(/^Lire\s+/iu, '').replace(/\s+(?:Scan\s+FR|Scan)\s*$/iu, '').replace(/\s*-\s*Mangas?\s+Origines\s*$/iu, '').trim();
+    return { series: cleaned || 'Série', number, label: `Chapitre ${number}` };
+  },
   readChapterPages: (doc) => {
     const container = chooseDominantContainer(doc);
     const candidates: HTMLImageElement[] = container

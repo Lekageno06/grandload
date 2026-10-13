@@ -50,6 +50,15 @@ describe('mangas-origines adapter', () => {
     expect(129 < decimalChapter! && decimalChapter! < 130).toBe(true);
   });
 
+  it('builds chapter metadata from the work title and URL, never the link text', () => {
+    const doc = new JSDOM(readMangasOriginesFixture('chapter.html'), {
+      url: 'https://mangas-origines.fr/oeuvre/overgeared/chapitre-320/',
+    }).window.document;
+    expect(mangasOriginesAdapter.readChapterMeta(doc, 'https://mangas-origines.fr/oeuvre/overgeared/chapitre-129-5/')).toEqual({
+      series: 'Overgeared', number: 129.5, label: 'Chapitre 129.5',
+    });
+  });
+
   it('sorts a synthetic 129.5 row derived from the fixture between 129 and 130', () => {
     const doc = new JSDOM(readMangasOriginesFixture('series.html'), {
       url: 'https://mangas-origines.fr/oeuvre/overgeared/',
