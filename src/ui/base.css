@@ -1,0 +1,16 @@
+*, *::before, *::after { box-sizing: border-box; }
+html { min-width: 320px; background: var(--bg); }
+body { margin: 0; background: var(--bg); color: var(--text); font: 400 13px/1.45 var(--font); -webkit-font-smoothing: antialiased; }
+button, input, select { font: inherit; color: inherit; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ui-shell { max-width: 900px; margin: 0 auto; padding: 24px 16px 40px; display: grid; gap: 20px; }
+.ui-stack { display: grid; gap: 12px; }
+.ui-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ui-card { padding: 16px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
+.ui-kicker { margin: 0; color: var(--text-faint); font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+.ui-muted { color: var(--text-muted); }
+.ui-section-title { margin: 0; color: var(--text); font-size: 13px; font-weight: 600; }
+.ui-stat { font-variant-numeric: tabular-nums; font-weight: 600; }
+.ui-actions { position: sticky; bottom: 12px; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: color-mix(in srgb, var(--surface-2) 92%, transparent); box-shadow: var(--shadow-2); backdrop-filter: blur(8px); }
+@container (max-width: 380px) { .ui-actions { align-items: stretch; flex-direction: column; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }

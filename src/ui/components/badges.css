@@ -1,0 +1,4 @@
+.ui-badge { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 9px; border: 1px solid var(--border); border-radius: 999px; background: color-mix(in srgb, var(--text) 5%, transparent); color: var(--text-muted); font-size: 12px; font-weight: 500; white-space: nowrap; }
+.ui-badge--success { color: var(--success); border-color: color-mix(in srgb, var(--success) 35%, transparent); background: color-mix(in srgb, var(--success) 12%, transparent); }
+.ui-badge--warning { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 35%, transparent); background: color-mix(in srgb, var(--warning) 12%, transparent); }
+.ui-badge--danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 35%, transparent); background: color-mix(in srgb, var(--danger) 12%, transparent); }

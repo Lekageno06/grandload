@@ -1,0 +1,8 @@
+.ui-progress { height: 6px; overflow: hidden; border-radius: 999px; background: var(--surface-3); }
+.ui-progress > span { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width 200ms var(--ease); }
+.ui-skeleton { height: 14px; border-radius: 6px; background: linear-gradient(90deg, var(--surface-2), var(--surface-3), var(--surface-2)); background-size: 200% 100%; animation: ui-shimmer 1.4s linear infinite; }
+@keyframes ui-shimmer { to { background-position: -200% 0; } }
+.ui-toast { display: inline-flex; align-items: center; gap: 8px; width: fit-content; padding: 9px 14px; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--surface-3); box-shadow: var(--shadow-2); font-size: 13px; }
+.ui-toast::before { width: 8px; height: 8px; border-radius: 50%; background: var(--success); content: ''; }
+.ui-empty { display: grid; justify-items: center; gap: 8px; padding: 32px 16px; text-align: center; }
+.ui-empty p { color: var(--text-muted); }

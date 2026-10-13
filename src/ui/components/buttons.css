@@ -1,0 +1,23 @@
+.ui-button, .ui-icon-button, .ui-chip { font: 500 13px/1 var(--font); letter-spacing: 0; text-transform: none; box-shadow: none; background-image: none; transition: background-color 120ms var(--ease), border-color 120ms var(--ease), color 120ms var(--ease); }
+.ui-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 14px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: transparent; color: var(--text); cursor: pointer; }
+.ui-button:hover { background: color-mix(in srgb, var(--text) 7%, transparent); border-color: color-mix(in srgb, var(--text) 30%, transparent); }
+.ui-button:active { background: color-mix(in srgb, var(--text) 11%, transparent); }
+.ui-button--primary { border-color: transparent; background: var(--accent); color: var(--accent-ink); }
+.ui-button--primary:hover { border-color: transparent; background: color-mix(in srgb, var(--accent) 88%, white); }
+.ui-button--primary:active { background: color-mix(in srgb, var(--accent) 80%, black); }
+.ui-button--ghost { border-color: transparent; color: var(--text-muted); }
+.ui-button--ghost:hover { border-color: transparent; color: var(--text); }
+.ui-button--danger { border-color: transparent; color: var(--danger); }
+.ui-button--danger:hover { border-color: transparent; background: color-mix(in srgb, var(--danger) 12%, transparent); }
+.ui-button:disabled { opacity: .4; background: transparent; border-color: var(--border); cursor: not-allowed; }
+.ui-button[aria-busy="true"] { cursor: wait; }
+.ui-button[aria-busy="true"]::before { width: 12px; height: 12px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; content: ''; animation: ui-spin .7s linear infinite; }
+@keyframes ui-spin { to { transform: rotate(360deg); } }
+.ui-icon-button { display: inline-grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text-muted); cursor: pointer; font-size: 16px; }
+.ui-icon-button:hover { background: color-mix(in srgb, var(--text) 8%, transparent); color: var(--text); }
+.ui-icon-button:disabled { opacity: .4; cursor: not-allowed; }
+.ui-chip { display: inline-flex; align-items: center; height: 26px; padding: 0 10px; border: 1px solid var(--border); border-radius: 999px; background: transparent; color: var(--text-muted); font-size: 12px; cursor: pointer; user-select: none; }
+.ui-chip:hover { color: var(--text); border-color: var(--border-strong); }
+.ui-chip[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 14%, transparent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); color: var(--accent); }
+.ui-chip:disabled { opacity: .4; cursor: not-allowed; }
+.ui-button:focus-visible, .ui-icon-button:focus-visible, .ui-chip:focus-visible, .ui-tab:focus-visible, .ui-input:focus-visible, .ui-select:focus-visible, input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

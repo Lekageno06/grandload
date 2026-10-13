@@ -1,0 +1,6 @@
+.ui-tabs { position: relative; display: inline-flex; gap: 2px; width: fit-content; max-width: 100%; overflow-x: auto; padding: 3px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); }
+.ui-tabs__indicator { position: absolute; z-index: 0; left: 0; height: 28px; border-radius: 7px; background: var(--surface-3); box-shadow: var(--shadow-1); pointer-events: none; transform: translateX(0); transition: transform 200ms var(--ease), width 200ms var(--ease); }
+.ui-tab { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px; border: 0; border-radius: 7px; background: transparent; color: var(--text-muted); font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; transition: color 120ms var(--ease); }
+.ui-tab:hover, .ui-tab[aria-selected="true"] { color: var(--text); }
+.ui-tab .ui-stat { padding: 1px 6px; border-radius: 999px; background: color-mix(in srgb, var(--text) 10%, transparent); font-size: 11px; }
+@media (prefers-reduced-motion: reduce) { .ui-tabs__indicator { transition: none; } }
