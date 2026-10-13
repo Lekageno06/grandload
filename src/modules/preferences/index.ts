@@ -24,6 +24,24 @@ const preferencesModule: GrandloadModule = {
       'Respectez les droits d’auteur et les conditions d’utilisation des sites.';
     panel.appendChild(responsibleUse);
 
+    const themeRow = document.createElement('label');
+    themeRow.className = 'd-grid gap-1';
+    themeRow.textContent = 'Thème';
+    const themeSelect = document.createElement('select');
+    themeSelect.className = 'form-select form-select-sm';
+    for (const option of [
+      { value: 'auto', label: 'Auto' },
+      { value: 'light', label: 'Clair' },
+      { value: 'dark', label: 'Sombre' },
+    ]) {
+      const element = document.createElement('option');
+      element.value = option.value;
+      element.textContent = option.label;
+      themeSelect.appendChild(element);
+    }
+    themeRow.appendChild(themeSelect);
+    panel.appendChild(themeRow);
+
     // 1. Format par défaut
     const formatRow = document.createElement('div');
     formatRow.className = 'd-grid gap-1';
@@ -147,6 +165,7 @@ const preferencesModule: GrandloadModule = {
     const moduleToggles: Record<string, HTMLInputElement> = {};
 
     void getPrefs().then((prefs) => {
+      themeSelect.value = prefs.theme || 'dark';
       formatSelect.value = prefs.format || 'cbz';
       concurrencyInput.value = String(prefs.concurrency || 1);
       delayInput.value = String(prefs.requestDelayMs || 1500);
@@ -213,6 +232,7 @@ const preferencesModule: GrandloadModule = {
         }
 
         await setPrefs({
+          theme: themeSelect.value as 'auto' | 'light' | 'dark',
           format,
           concurrency,
           requestDelayMs,

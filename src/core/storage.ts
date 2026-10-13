@@ -4,8 +4,10 @@ import { GrandloadError } from './errors';
 export type StorageAreaName = 'local' | 'session';
 
 export type AcquisitionStrategy = 'auto' | 'live-dom' | 'html-parse';
+export type ThemePreference = 'auto' | 'light' | 'dark';
 
 export interface Prefs {
+  theme: ThemePreference;
   format: 'zip' | 'cbz' | 'folder';
   concurrency: number;
   requestDelayMs: number;
@@ -107,6 +109,7 @@ export const STORAGE_KEYS = {
 } as const;
 
 export const DEFAULT_PREFS: Prefs = {
+  theme: 'dark',
   format: 'cbz',
   concurrency: 1,
   requestDelayMs: 1500,

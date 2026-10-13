@@ -26,6 +26,13 @@
   `fix(archive): padding des noms d'entrées (RG-302)`
 - `.gitignore` : `node_modules/`, `dist/`, `*.zip`, `.DS_Store`
 
+## UI Phase 4
+
+- Les composants partagés ne contiennent aucune logique métier : données et callbacks uniquement.
+- Les textes visibles passent par `src/sidepanel/i18n.ts`.
+- Toute progression ajoute `aria-live` ou un libellé accessible ; les tâches sont annulables.
+- Les contrôles utilisent les classes du design system ; aucune règle de secours scoppée sous `.ui-app` n'est autorisée.
+
 ## Checklist de test manuel avant PR
 - [ ] `npm run build` OK, chargement de `dist/` sans erreur console
 - [ ] Mode générique : scan, filtres, export

@@ -34,15 +34,6 @@ body { min-width: 320px; min-height: 100vh; container-type: inline-size; }
 .job-item__meta { color: var(--text-muted); font-size: 12px; }
 .panel-action-bar { position: sticky; bottom: 0; z-index: 4; display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-height: 48px; padding: var(--space-2) 0 0; border-top: 1px solid var(--border); background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(10px); }
 .panel-action-bar #panel-selection { color: var(--text-muted); font-size: 12px; }
-.ui-app h2 { color: var(--text); font-size: 15px; font-weight: 600; }
-.ui-app label { color: var(--text-muted); font-size: 12px; }
-.ui-app button:not(.ui-button):not(.ui-icon-button):not(.ui-chip):not(.ui-tab):not(.panel-tab):not(.ui-gallery-card__check) { min-height: 32px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text); cursor: pointer; }
-.ui-app button:not(.ui-button):not(.ui-icon-button):not(.ui-chip):not(.ui-tab):not(.panel-tab):not(.ui-gallery-card__check):hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 7%, transparent); }
-.ui-app button:disabled { cursor: not-allowed; opacity: .4; }
-.ui-app select, .ui-app input:not([type="checkbox"]):not([type="radio"]):not([type="range"]) { min-height: 32px; padding: 0 9px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text); }
-.ui-app input[type="checkbox"] { width: 16px; height: 16px; margin: 0 6px 0 0; appearance: none; border: 1px solid var(--border-strong); border-radius: 4px; background: var(--surface-2); vertical-align: -3px; }
-.ui-app input[type="checkbox"]:checked { border-color: var(--accent); background: var(--accent); box-shadow: inset 0 0 0 3px var(--surface); }
-.ui-app input[type="range"] { accent-color: var(--accent); }
 @keyframes panel-enter { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) { .panel-content { animation: none; } }
 @container (max-width: 380px) { .panel-header { align-items: flex-start; flex-direction: column; } .panel-version { align-self: flex-end; margin-top: -34px; } .panel-action-bar { align-items: stretch; flex-direction: column; } }

@@ -234,6 +234,14 @@ Le comportement exact doit être vérifié manuellement dans Chrome/Edge :
 
 ## 10. Stockage
 
+## 11. UI migrée
+
+Les modules chapitre et série utilisent les composants de `src/ui/components` et ne collectent
+jamais directement le DOM distant. `ImageGallery` accepte un mode ordonné pour les planches.
+Les tâches sont rendues dans un volet `details` avec progression accessible, annulation et détails
+dépliables. Les préférences sont persistées dans `prefs`, dont le thème (`auto`, `light`, `dark`)
+est appliqué à l'élément racine du panneau.
+
 | Zone              | Clé                      | Contenu                                                   |
 | ----------------- | ------------------------ | --------------------------------------------------------- |
 | `storage.session` | `runtime`                | état volatil (offscreen ouvert, onglet temporaire)        |

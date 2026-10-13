@@ -14,4 +14,12 @@ describe('coquille du panneau', () => {
     expect(sidepanel).toContain('aria-label="Préférences"');
     expect(sidepanel).toContain('<details id="tasks-panel"');
   });
+
+  it('n’utilise plus de règles de secours natives scoppées sous ui-app', () => {
+    const css = readFileSync(
+      fileURLToPath(new URL('../src/sidepanel/shell.css', import.meta.url)),
+      'utf8',
+    );
+    expect(css).not.toMatch(/\.ui-app\s+(button|input|select|label|h2)/u);
+  });
 });

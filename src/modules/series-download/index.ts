@@ -139,6 +139,7 @@ const seriesDownloadModule: GrandloadModule = {
 
     const status = document.createElement('p');
     status.className = 'small text-body-secondary mb-0';
+    status.setAttribute('aria-live', 'polite');
     status.textContent = 'Lecture des chapitres…';
     panel.appendChild(status);
 
@@ -194,6 +195,7 @@ const seriesDownloadModule: GrandloadModule = {
     chapterList.style.maxHeight = '260px';
     chapterList.style.overflowY = 'auto';
     chapterList.setAttribute('aria-label', 'Liste des chapitres');
+    chapterList.setAttribute('aria-busy', 'true');
     panel.appendChild(chapterList);
 
     const formatLabel = document.createElement('label');
@@ -228,6 +230,7 @@ const seriesDownloadModule: GrandloadModule = {
     jobsHeading.textContent = 'File de téléchargement';
     const jobsList = document.createElement('div');
     jobsList.className = 'd-grid gap-2';
+    jobsList.setAttribute('aria-live', 'polite');
     jobsArea.append(jobsHeading, jobsList);
     panel.appendChild(jobsArea);
 
@@ -313,6 +316,11 @@ const seriesDownloadModule: GrandloadModule = {
                     : 'En attente';
         progress.textContent = `${stateLabel} · ${parent.progress.done}/${parent.progress.total} chapitres`;
         card.append(title, progress);
+        const overall = document.createElement('progress');
+        overall.max = Math.max(1, parent.progress.total);
+        overall.value = parent.progress.done;
+        overall.setAttribute('aria-label', 'Progression globale de la série');
+        card.appendChild(overall);
 
         const summary = document.createElement('span');
         summary.className = 'small';
@@ -539,11 +547,14 @@ const seriesDownloadModule: GrandloadModule = {
           downloaded: state.downloadedUrls.has(chapter.url),
           selected: !state.downloadedUrls.has(chapter.url),
         }));
+        chapterList.setAttribute('aria-busy', 'false');
         status.textContent = `${info.title} · ${info.chapters.length} chapitres`;
         renderChapters();
         updateStartButton();
         await refreshJobs();
       } catch (error) {
+        chapterList.setAttribute('aria-busy', 'false');
+        chapterList.classList.add('alert', 'alert-danger');
         status.textContent =
           error instanceof Error ? error.message : 'Lecture de la série impossible.';
         api.setStatus?.(status.textContent);

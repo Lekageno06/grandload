@@ -4,7 +4,7 @@ import './shell.css';
 import { send } from '../core/messaging';
 import { listModules } from '../core/registry';
 import { getJobs, getPrefs } from '../core/storage';
-import type { PageContext } from '../core/types';
+import type { Job, PageContext } from '../core/types';
 import { formatJobLabel } from './job-labels';
 import { getVisibleModules } from './module-visibility';
 import { icon } from '../ui/icons';
@@ -21,6 +21,13 @@ function node(id: string): HTMLElement | null {
 function setStatus(message: string): void {
   const target = node('status');
   if (target) target.textContent = message;
+}
+
+function applyTheme(theme: 'auto' | 'light' | 'dark'): void {
+  const resolved = theme === 'auto'
+    ? (globalThis.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+    : theme;
+  document.documentElement.dataset.theme = resolved;
 }
 function renderBuildInfo(): void {
   const version = node('app-version');
@@ -56,11 +63,38 @@ function renderJobs(): void {
         title.textContent = formatJobLabel(job.params);
         const state = document.createElement('div');
         state.className = 'job-item__meta';
-        state.textContent = job.state;
+        const labels: Record<Job['state'], string> = {
+          queued: 'En attente', running: 'En cours', paused: 'En pause', done: 'Terminé',
+          failed: 'Échec', ignored: 'Ignoré', cancelled: 'Annulé',
+        };
+        state.textContent = labels[job.state];
         const progress = document.createElement('div');
         progress.className = 'job-item__meta';
         progress.textContent = `${job.progress.done}/${job.progress.total} planches`;
-        item.append(title, state, progress);
+        const progressBar = document.createElement('progress');
+        progressBar.max = Math.max(1, job.progress.total);
+        progressBar.value = job.progress.done;
+        progressBar.setAttribute('aria-label', 'Progression de la tâche');
+        item.append(title, state, progress, progressBar);
+        if (job.error || job.warning) {
+          const details = document.createElement('details');
+          const summary = document.createElement('summary');
+          summary.textContent = 'Détails';
+          const message = document.createElement('p');
+          message.className = 'job-item__meta';
+          message.textContent = job.error?.message ?? job.warning?.message ?? '';
+          details.append(summary, message);
+          item.append(details);
+        }
+        const cancel = document.createElement('button');
+        cancel.type = 'button';
+        cancel.className = 'btn btn-outline-danger';
+        cancel.textContent = 'Annuler';
+        cancel.addEventListener('click', () => {
+          cancel.disabled = true;
+          void send('JOB_CONTROL', { jobId: job.id, action: 'cancel' }).then(() => renderJobs());
+        });
+        item.append(cancel);
         list.append(item);
       }
     })
@@ -235,6 +269,7 @@ async function initializePanel(): Promise<void> {
     return;
   }
   const prefs = await getPrefs();
+  applyTheme(prefs.theme);
   renderModules(context, prefs, sequence);
 }
 

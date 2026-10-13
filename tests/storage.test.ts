@@ -56,6 +56,11 @@ describe('storage', () => {
     expect(result.jobs.invalid).toBeUndefined();
   });
 
+  it('utilise le thème sombre par défaut', async () => {
+    const { getPrefs } = await import('../src/core/storage');
+    expect((await getPrefs()).theme).toBe('dark');
+  });
+
   beforeEach(() => {
     const store = new Map<string, unknown>();
     const chromeMock: ChromeStorageMock = {

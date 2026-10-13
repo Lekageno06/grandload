@@ -3,6 +3,18 @@ html { min-width: 320px; background: var(--bg); }
 body { margin: 0; background: var(--bg); color: var(--text); font: 400 13px/1.45 var(--font); -webkit-font-smoothing: antialiased; }
 button, input, select { font: inherit; color: inherit; }
 button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn { display: inline-flex; align-items: center; justify-content: center; min-height: 32px; padding: 0 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: transparent; color: var(--text); font: 500 13px/1 var(--font); cursor: pointer; }
+.btn:hover { background: color-mix(in srgb, var(--text) 7%, transparent); }
+.btn-primary { border-color: transparent; background: var(--accent); color: var(--accent-ink); }
+.btn-primary:hover { background: color-mix(in srgb, var(--accent) 88%, white); }
+.btn-outline-danger, .btn-danger { border-color: transparent; background: transparent; color: var(--danger); }
+.btn-outline-danger:hover, .btn-danger:hover { background: color-mix(in srgb, var(--danger) 12%, transparent); }
+.btn-success { border-color: transparent; background: var(--success); color: var(--accent-ink); }
+.btn:disabled { cursor: not-allowed; opacity: .4; }
+.form-control, .form-select { min-height: 32px; padding: 0 9px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text); }
+.form-check-input { width: 16px; height: 16px; accent-color: var(--accent); }
+.form-check { color: var(--text-muted); }
+progress { width: 100%; height: 8px; accent-color: var(--accent); }
 .ui-shell { max-width: 900px; margin: 0 auto; padding: 24px 16px 40px; display: grid; gap: 20px; }
 .ui-stack { display: grid; gap: 12px; }
 .ui-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }

@@ -103,6 +103,14 @@ L'agent cite les RG implémentées dans ses commits.
 - **RG-605** 🔴 Pas de contournement de connexion, paywall ou captcha. Usage personnel hors-ligne. Débit raisonnable (RG-206).
 
 ## L. Interface
+
+Les règles RG-700 à RG-704 sont réécrites pour la refonte UI :
+
+- **RG-700** Interface française : les textes sont centralisés dans `i18n.ts`.
+- **RG-701** Les vues utilisent les composants UI partagés, sans logique métier dans les composants.
+- **RG-702** Chaque vue expose les états vide, chargement, erreur, permission requise et succès.
+- **RG-703** Les progressions sont visibles, annoncées par `aria-live`, et les jobs proposent pause, reprise et annulation lorsque possible.
+- **RG-704** Les préférences couvrent thème, format, concurrence, délais, sous-dossier, stratégie, pré-exclusions et modules actifs ; Préférences reste activé.
 - **RG-700** 🔴 Interface en français, textes centralisés (`i18n.ts`).
 - **RG-701** 🔴 Bootstrap local ; onglets = modules applicables au contexte.
 - **RG-702** 🔴 États vides explicites ; erreurs lisibles, détail technique dans `console.error`.
