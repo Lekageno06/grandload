@@ -127,7 +127,7 @@ const seriesDownloadModule: GrandloadModule = {
   priority: 90,
   requiredPermissions: ['activeTab', 'scripting'],
   canHandle: (context: PageContext) => context.kind === 'series',
-  mountPopup: (root: HTMLElement, context: PageContext, api: ModuleApi): void => {
+  mountPanel: (root: HTMLElement, context: PageContext, api: ModuleApi): void => {
     const panel = document.createElement('div');
     panel.className = 'd-grid gap-3';
     root.appendChild(panel);
@@ -333,7 +333,7 @@ const seriesDownloadModule: GrandloadModule = {
           if (child.warning) {
             const warning = document.createElement('span');
             warning.className = 'small text-warning-emphasis';
-            warning.textContent = `Le fichier a été enregistré sous ${child.warning.actual} (nom demandé : ${child.warning.requested}). Une autre extension ou un réglage du navigateur a peut-être modifié le nom.`;
+            warning.textContent = child.warning.message || `Le fichier a été enregistré sous ${child.warning.actual} (nom demandé : ${child.warning.requested}). Une autre extension ou un réglage du navigateur a peut-être modifié le nom.`;
             card.appendChild(warning);
           }
         }

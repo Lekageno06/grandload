@@ -12,14 +12,21 @@ const releaseVersion = process.env.GRANDLOAD_VERSION ?? '0.2.0';
 const commonEntries = {
   'service-worker': 'src/background/service-worker.ts',
   content: 'src/content/content.ts',
-  popup: 'src/popup/main.ts',
+  sidepanel: 'src/sidepanel/main.ts',
 };
 
 function makeManifest(browser) {
   const manifest = JSON.parse(fs.readFileSync(path.join(publicDir, 'manifest.json'), 'utf8'));
   manifest.version = releaseVersion;
   if (browser === 'firefox') {
-    manifest.permissions = manifest.permissions.filter((permission) => permission !== 'offscreen');
+    manifest.permissions = manifest.permissions.filter(
+      (permission) => permission !== 'offscreen' && permission !== 'sidePanel',
+    );
+    delete manifest.side_panel;
+    manifest.sidebar_action = {
+      default_panel: 'sidepanel.html',
+      default_title: 'Grandload',
+    };
     manifest.background = { scripts: ['service-worker.js'], type: 'module' };
     manifest.browser_specific_settings = {
       gecko: {
@@ -65,10 +72,6 @@ async function buildVariant(browser, variantDir) {
     path.join(variantDir, 'manifest.json'),
     `${JSON.stringify(makeManifest(browser), null, 2)}\n`,
   );
-  const bootstrapSource = path.join('node_modules', 'bootstrap', 'dist', 'css', 'bootstrap.min.css');
-  const bootstrapTarget = path.join(variantDir, 'vendor', 'bootstrap.min.css');
-  fs.mkdirSync(path.dirname(bootstrapTarget), { recursive: true });
-  fs.copyFileSync(bootstrapSource, bootstrapTarget);
   if (isFirefox) fs.rmSync(path.join(variantDir, 'offscreen.html'), { force: true });
 }
 

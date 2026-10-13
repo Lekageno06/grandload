@@ -176,6 +176,20 @@ Persisté dans `chrome.storage.local` (`jobs`) ; l'historique des chapitres tél
 - `declarativeNetRequestWithHostAccess` n'est ajouté **que** si un site exige un en-tête `Referer` (voir `ARCHIVES.md`).
 - Firefox : prévoir `browser_specific_settings` et une variante sans `offscreen` (jalon final).
 
+## 9 bis. Panneau latéral et `activeTab`
+
+Chrome/Edge ouvrent `sidepanel.html` via `chrome.sidePanel.setPanelBehavior` dans le bootstrap du Service Worker. Le code de l’interface ne dépend pas de `chrome.sidePanel`. La variante Firefox utilise `sidebar_action` avec la même page.
+
+Le panneau ne demande ni `tabs` ni hôtes fixes. Il lit l’onglet actif lorsque son URL est exposée par `tabs.query`; sinon il affiche « Cliquez sur l’icône Grandload pour analyser cet onglet » sans bouton d’autorisation. Lorsque l’origine est connue mais que le contexte n’est pas accessible, un clic utilisateur peut demander uniquement `<origine>/*` via `chrome.permissions.request`.
+
+Le comportement exact doit être vérifié manuellement dans Chrome/Edge :
+
+1. Charger `dist/`, ouvrir le panneau avec l’icône Grandload sur une page HTTP/HTTPS, puis noter si le domaine et les modules apparaissent.
+2. Sans fermer le panneau, changer d’onglet vers une page autorisée puis vers une page non autorisée ; noter si `tab.url` et le contexte se mettent à jour.
+3. Sur l’onglet non autorisé dont l’URL est visible, cliquer « Autoriser sur ce site » et vérifier que seule son origine est demandée.
+4. Cliquer l’icône Grandload alors que le panneau est déjà ouvert, puis vérifier si l’onglet courant récupère `activeTab` et si le contexte apparaît.
+5. Naviguer ou recharger l’onglet autorisé, puis répéter après fermeture/réouverture du panneau ; noter si l’accès persiste et transmettre les résultats avant d’envisager un panneau par onglet.
+
 ## 10. Stockage
 | Zone | Clé | Contenu |
 |---|---|---|

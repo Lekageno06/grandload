@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_PREFS } from '../src/core/storage';
 import type { GrandloadModule, PageContext } from '../src/core/types';
-import { getVisibleModules } from '../src/popup/module-visibility';
+import { getVisibleModules } from '../src/sidepanel/module-visibility';
 
 const context: PageContext = {
   url: 'https://mangas-origines.fr/oeuvre/overgeared/',
@@ -17,7 +17,7 @@ function testModule(id: string, canHandle: (ctx: PageContext) => boolean): Grand
     title: id,
     priority: 1,
     canHandle,
-    mountPopup: () => undefined,
+    mountPanel: () => undefined,
   };
 }
 

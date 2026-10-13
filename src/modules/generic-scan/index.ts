@@ -586,7 +586,7 @@ export const genericScanModule: GrandloadModule = {
   title: 'Scan générique',
   priority: 10,
   canHandle: (ctx: PageContext) => /^https?:\/\//.test(ctx.url),
-  mountPopup: (root: HTMLElement, ctx: PageContext, api: ModuleApi): void => {
+  mountPanel: (root: HTMLElement, ctx: PageContext, api: ModuleApi): void => {
     buildPopupCard(root, ctx, api);
   },
   requiredPermissions: ['activeTab', 'scripting'],

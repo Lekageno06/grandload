@@ -3,12 +3,10 @@
   "name": "Grandload",
   "version": "0.2.0",
   "description": "Extrait, filtre et télécharge liens, médias et chapitres de webtoons et mangas.",
-  "permissions": ["activeTab", "scripting", "downloads", "storage", "offscreen"],
+  "permissions": ["activeTab", "scripting", "downloads", "storage", "offscreen", "sidePanel"],
   "optional_host_permissions": ["https://*/*", "http://*/*"],
-  "action": {
-    "default_popup": "popup.html",
-    "default_title": "Grandload"
-  },
+  "action": { "default_title": "Grandload" },
+  "side_panel": { "default_path": "sidepanel.html" },
   "background": {
     "service_worker": "service-worker.js"
   },

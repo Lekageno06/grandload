@@ -71,6 +71,12 @@ function scheduleDownloads(items: DownloadItem[], domain: string): void {
 
 console.info('Grandload service worker started.');
 
+if (chrome.sidePanel?.setPanelBehavior) {
+  void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch((error: unknown) => {
+    console.warn('Le panneau latéral ne peut pas être configuré.', error);
+  });
+}
+
 if (typeof chrome.downloads.onDeterminingFilename?.addListener === 'function') {
   chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
     void suggestRequestedDownloadName(item, suggest);

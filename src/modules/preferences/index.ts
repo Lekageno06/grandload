@@ -8,7 +8,7 @@ const preferencesModule: GrandloadModule = {
   title: 'Préférences',
   priority: 10,
   canHandle: () => true, // Toujours disponible
-  mountPopup: (root: HTMLElement, _context: PageContext, api: ModuleApi): void => {
+  mountPanel: (root: HTMLElement, _context: PageContext, api: ModuleApi): void => {
     const panel = document.createElement('div');
     panel.className = 'd-grid gap-3';
     root.appendChild(panel);

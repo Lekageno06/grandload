@@ -9,6 +9,12 @@ export interface PageContext {
   tabId: number;
 }
 
+export interface ChapterMeta {
+  series: string;
+  number: number;
+  label: string;
+}
+
 export interface ModuleApi {
   setStatus?: (message: string) => void;
   setBusy?: (busy: boolean) => void;
@@ -27,7 +33,7 @@ export interface GrandloadModule {
   title: string;
   priority: number;
   canHandle: (ctx: PageContext) => boolean;
-  mountPopup: (root: HTMLElement, ctx: PageContext, api: ModuleApi) => void;
+  mountPanel: (root: HTMLElement, ctx: PageContext, api: ModuleApi) => void;
   registerBackground?: (router: MessageRouter) => void;
   requiredPermissions?: readonly string[];
 }
@@ -38,6 +44,7 @@ export interface SiteAdapter {
   classify: (url: URL) => PageKind;
   readSeries: (doc: Document) => SeriesInfo;
   readChapterPages: (doc: Document) => PageRef[];
+  readChapterMeta: (doc: Document, url: string) => ChapterMeta;
   countChapterPageElements?: (doc: Document) => number;
   prepareChapter?: (doc: Document) => Promise<void>;
   acquisition: 'live-dom' | 'html-parse';
@@ -109,6 +116,7 @@ export interface Job {
   warning?: {
     requested: string;
     actual: string;
+    message?: string;
   };
   createdAt: number;
 }

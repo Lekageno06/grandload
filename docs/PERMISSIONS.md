@@ -11,6 +11,8 @@ Audit réalisé pour le Jalon 7 (RG-600 à RG-605). Aucune permission non docume
 | `offscreen` (Chrome uniquement) | `offscreen.html` et `src/offscreen/archive-builder.ts` | Déporter les fetch massifs, blobs et ZIP hors du Service Worker | Construire dans la popup ou le Service Worker, fragile et contraire à RG-305 |
 | `http://*/*`, `https://*/*` dans `optional_host_permissions` | Accès ponctuel au domaine de la page et aux images sélectionnées | Demander l'accès au domaine au clic, conformément à RG-600 | Accès fixe à tous les sites, refusé pour minimiser les privilèges |
 
+| `sidePanel` (Chrome/Edge uniquement) | Ouvrir `sidepanel.html` à côté de l’onglet depuis l’icône d’action | Remplacer la popup par le panneau latéral persistant | `action.default_popup`, trop petit et fermé lors des changements d’onglet |
+
 ## Permissions inutiles
 
 L'audit du code ne relève aucune permission fixe inutilisée. `offscreen` est utile dans le paquet Chrome, mais n'est pas déclarée dans le manifest Firefox : Firefox exécute le même contrat de packager dans sa page d'événement.

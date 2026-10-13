@@ -10,7 +10,7 @@ describe('registry', () => {
       title: 'Module A',
       priority: 10,
       canHandle: () => true,
-      mountPopup: () => undefined,
+      mountPanel: () => undefined,
     };
 
     const secondModule: GrandloadModule = {
@@ -18,7 +18,7 @@ describe('registry', () => {
       title: 'Module B',
       priority: 25,
       canHandle: () => true,
-      mountPopup: () => undefined,
+      mountPanel: () => undefined,
     };
 
     registerModule(firstModule);

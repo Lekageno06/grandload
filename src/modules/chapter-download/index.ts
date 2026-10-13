@@ -23,6 +23,10 @@ type SelectablePage = PageRef & {
 };
 type ChapterDomData = { pages: SelectablePage[]; seriesTitle: string; chapterLabel: string };
 
+function cleanWorkTitle(value: string): string {
+  return value.replace(/\s+/gu, ' ').trim().replace(/^Lire\s+/iu, '').replace(/\s+(?:Scan\s+FR|Scan)\s*$/iu, '').replace(/\s*-\s*Mangas?\s+Origines\s*$/iu, '').trim();
+}
+
 export function getChapterSelectionCounts(items: readonly Pick<SelectablePage, 'selected'>[]): {
   included: number;
   excluded: number;
@@ -123,9 +127,11 @@ function collectChapterImages(tabId: number, adapterId: string): Promise<Chapter
 
           const seriesTitle =
             document.querySelector('.ori-lec-titre')?.textContent?.trim() ||
-            document.title.replace(/\s*[-|].*$/u, '').trim() ||
+            cleanWorkTitle(document.querySelector('meta[property="og:title"]')?.getAttribute('content') || document.title) ||
             'Série';
-          const chapterLabel = document.querySelector('.ori-lec-chap')?.textContent?.trim() || '';
+          const chapterMatch = window.location.pathname.match(/\/chapitre-(\d+)(?:-(\d+))?\/?$/iu);
+          const chapterNumber = chapterMatch?.[1] ? Number(chapterMatch[1]) + (chapterMatch[2] ? Number(`0.${chapterMatch[2]}`) : 0) : 0;
+          const chapterLabel = `Chapitre ${chapterNumber}`;
           return { pages, seriesTitle, chapterLabel };
         },
       },
@@ -159,7 +165,7 @@ const chapterDownloadModule: GrandloadModule = {
   priority: 100,
   requiredPermissions: ['activeTab'],
   canHandle: (ctx: PageContext) => ctx.kind === 'chapter',
-  mountPopup: (root: HTMLElement, ctx: PageContext, api: ModuleApi): void => {
+  mountPanel: (root: HTMLElement, ctx: PageContext, api: ModuleApi): void => {
     const state = {
       items: [] as SelectablePage[],
       chapterData: { pages: [] as SelectablePage[], seriesTitle: 'Série', chapterLabel: '' },
@@ -363,7 +369,7 @@ const chapterDownloadModule: GrandloadModule = {
       state: string;
       progress: { done: number; total: number };
       error?: { code: string; message: string };
-      warning?: { requested: string; actual: string };
+      warning?: { requested: string; actual: string; message?: string };
     }): void => {
       if (payload.jobId !== state.jobId) {
         return;
@@ -404,7 +410,7 @@ const chapterDownloadModule: GrandloadModule = {
       if (!job.warning) {
         return '';
       }
-      return `Le fichier a été enregistré sous ${job.warning.actual} (nom demandé : ${job.warning.requested}). Une autre extension ou un réglage du navigateur a peut-être modifié le nom.`;
+      return job.warning.message || `Le fichier a été enregistré sous ${job.warning.actual} (nom demandé : ${job.warning.requested}). Une autre extension ou un réglage du navigateur a peut-être modifié le nom.`;
     };
 
     const jobTitle = (job: Job): string => {
@@ -516,7 +522,7 @@ const chapterDownloadModule: GrandloadModule = {
               state: string;
               progress: { done: number; total: number };
               error?: { code: string; message: string };
-              warning?: { requested: string; actual: string };
+              warning?: { requested: string; actual: string; message?: string };
             },
           );
         }
