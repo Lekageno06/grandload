@@ -46,27 +46,40 @@ function scanCurrentPageInTab(
   pageUrl: string,
   loadLazy: boolean,
 ): Promise<ScanItem[]> {
-  return injectContentReader(tabId).then(
-    () =>
-      new Promise<ScanItem[]>((resolve, reject) => {
-        chrome.tabs.sendMessage(
-          tabId,
-          { type: 'READ_PAGE_ASSETS', payload: { pageUrl, loadLazy } },
-          (response: { ok?: boolean; data?: ScanItem[] } | undefined) => {
-            const runtimeError = chrome.runtime.lastError;
-            if (runtimeError) {
-              reject(new Error(runtimeError.message ?? 'Lecture de la page impossible.'));
-              return;
-            }
-            if (!response?.ok || !response.data) {
-              reject(new Error('Lecture de la page impossible.'));
-              return;
-            }
-            resolve(response.data);
-          },
-        );
-      }),
-  );
+  const request = (lazy: boolean): Promise<ScanItem[]> =>
+    new Promise<ScanItem[]>((resolve, reject) => {
+      chrome.tabs.sendMessage(
+        tabId,
+        { type: 'READ_PAGE_ASSETS', payload: { pageUrl, loadLazy: lazy } },
+        (response: { ok?: boolean; data?: ScanItem[] } | undefined) => {
+          const runtimeError = chrome.runtime.lastError;
+          if (runtimeError) {
+            reject(new Error(runtimeError.message ?? 'Lecture de la page impossible.'));
+            return;
+          }
+          if (!response?.ok || !response.data) {
+            reject(new Error('Lecture de la page impossible.'));
+            return;
+          }
+          resolve(response.data);
+        },
+      );
+    });
+
+  return injectContentReader(tabId).then(async () => {
+    try {
+      return await request(loadLazy);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!loadLazy || !/message channel closed|message port closed|returning true/iu.test(message)) {
+        throw error;
+      }
+      // Certains lecteurs remplacent le document pendant le défilement lazy :
+      // relire immédiatement le DOM courant garantit un résultat exploitable.
+      await injectContentReader(tabId);
+      return await request(false);
+    }
+  });
 }
 
 function isPermissionError(error: unknown): boolean {
