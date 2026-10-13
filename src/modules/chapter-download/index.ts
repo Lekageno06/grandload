@@ -13,6 +13,9 @@ import type {
   PageRef,
 } from '../../core/types';
 import { processPageExclusions } from './exclusions';
+import { ImageGallery } from '../../ui/components/gallery';
+import type { GalleryItem } from '../../ui/components/gallery';
+import { t } from '../../sidepanel/i18n';
 
 type SelectablePage = PageRef & {
   id: string;
@@ -156,7 +159,7 @@ const chapterDownloadModule: GrandloadModule = {
 
     const heading = document.createElement('div');
     heading.className = 'fw-semibold';
-    heading.textContent = 'Télécharger le chapitre';
+    heading.textContent = t('chapterTitle');
     panel.appendChild(heading);
 
     const meta = document.createElement('div');
@@ -176,7 +179,7 @@ const chapterDownloadModule: GrandloadModule = {
     autoExcludeInput.setAttribute('role', 'switch');
     const autoExcludeText = document.createElement('span');
     autoExcludeText.className = 'form-check-label ms-1';
-    autoExcludeText.textContent = 'Pré-exclusions automatiques';
+    autoExcludeText.textContent = t('autoExclusions');
     autoExcludeLabel.append(autoExcludeInput, autoExcludeText);
     optionsRow.appendChild(autoExcludeLabel);
 
@@ -185,7 +188,7 @@ const chapterDownloadModule: GrandloadModule = {
     memorizeButton.type = 'button';
     memorizeButton.className = 'btn btn-sm btn-outline-secondary';
     memorizeButton.title = 'Mémoriser les exclusions (dernière planche ou motifs) pour ce site';
-    memorizeButton.textContent = 'Mémoriser';
+    memorizeButton.textContent = t('remember');
     optionsRow.appendChild(memorizeButton);
     panel.appendChild(optionsRow);
 
@@ -199,7 +202,7 @@ const chapterDownloadModule: GrandloadModule = {
 
     const formatLabel = document.createElement('label');
     formatLabel.className = 'd-grid gap-1 small';
-    formatLabel.textContent = 'Format';
+    formatLabel.textContent = t('format');
     const formatSelect = document.createElement('select');
     formatSelect.className = 'form-select form-select-sm';
     for (const format of [
@@ -214,6 +217,17 @@ const chapterDownloadModule: GrandloadModule = {
     }
     formatLabel.appendChild(formatSelect);
     panel.appendChild(formatLabel);
+
+    const archiveNameLabel = document.createElement('label');
+    archiveNameLabel.className = 'd-grid gap-1 small';
+    archiveNameLabel.textContent = t('filename');
+    const archiveNameInput = document.createElement('input');
+    archiveNameInput.type = 'text';
+    archiveNameInput.className = 'form-control form-control-sm';
+    archiveNameInput.value = 'chapitre';
+    archiveNameInput.maxLength = 150;
+    archiveNameLabel.appendChild(archiveNameInput);
+    panel.appendChild(archiveNameLabel);
 
     const progressContainer = document.createElement('div');
     progressContainer.className = 'd-grid gap-1';
@@ -252,13 +266,13 @@ const chapterDownloadModule: GrandloadModule = {
     buttonDownload.type = 'button';
     buttonDownload.className = 'btn btn-primary w-100';
     buttonDownload.disabled = true;
-    buttonDownload.textContent = 'Télécharger';
+    buttonDownload.textContent = t('download');
     panel.appendChild(buttonDownload);
 
     const buttonCancel = document.createElement('button');
     buttonCancel.type = 'button';
     buttonCancel.className = 'btn btn-outline-danger w-100';
-    buttonCancel.textContent = 'Annuler';
+    buttonCancel.textContent = t('cancel');
     buttonCancel.hidden = true;
     panel.appendChild(buttonCancel);
 
@@ -269,45 +283,29 @@ const chapterDownloadModule: GrandloadModule = {
         grid.appendChild(buildEmptyState());
         return;
       }
-
-      for (const item of state.items) {
-        const entry = document.createElement('label');
-        entry.className = 'd-flex align-items-center gap-2 p-2 border rounded';
-        if (!item.selected) {
-          entry.classList.add('bg-light', 'text-muted');
-        }
-
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        checkbox.checked = item.selected;
-        checkbox.disabled = state.busy;
-        checkbox.addEventListener('change', () => {
-          setItemSelection(item, checkbox.checked);
+      const galleryItems: GalleryItem[] = state.items.map((item) => ({
+        id: item.id,
+        url: item.url,
+        label: item.label,
+        ext: item.ext,
+        ...(item.width ? { width: item.width } : {}),
+        ...(item.height ? { height: item.height } : {}),
+        selected: item.selected,
+        ...(getExclusionBadgeText(item) ? { badge: getExclusionBadgeText(item)! } : {}),
+      }));
+      const gallery = new ImageGallery(galleryItems, {
+        ordered: true,
+        onSelectionChange: (selected) => {
+          const selectedIds = new Set(selected.map((item) => item.id));
+          state.items.forEach((item) => {
+            setItemSelection(item, selectedIds.has(item.id));
+          });
           renderGrid();
           updateActions();
-        });
-
-        const text = document.createElement('span');
-        text.className = 'small text-truncate flex-grow-1';
-        text.textContent = `${item.label}`;
-
-        entry.appendChild(checkbox);
-        entry.appendChild(text);
-
-        // Une suggestion reste incluse et visible; une exclusion a toujours une raison.
-        const badgeText = getExclusionBadgeText(item);
-        if (badgeText) {
-          const badge = document.createElement('span');
-          badge.className = item.isSuggestedExclusion
-            ? 'badge bg-info text-dark text-wrap text-start ms-auto'
-            : 'badge bg-warning text-dark text-wrap text-start ms-auto';
-          badge.style.fontSize = '0.7rem';
-          badge.textContent = badgeText;
-          entry.appendChild(badge);
-        }
-
-        grid.appendChild(entry);
-      }
+        },
+      });
+      gallery.element.setAttribute('aria-label', t('orderedGallery'));
+      grid.appendChild(gallery.element);
     };
 
     const setItemSelection = (item: SelectablePage, selected: boolean): void => {
@@ -329,6 +327,7 @@ const chapterDownloadModule: GrandloadModule = {
       buttonDownload.textContent =
         counts.included === 0 ? 'Télécharger' : `Télécharger (${counts.included})`;
       formatSelect.disabled = state.busy;
+      archiveNameInput.disabled = state.busy;
       buttonCancel.hidden = !state.busy;
     };
 
@@ -551,7 +550,10 @@ const chapterDownloadModule: GrandloadModule = {
             pages: selected.map(({ id: _id, label: _label, selected: _selected, ...page }) => page),
             packagerId: formatSelect.value as 'cbz' | 'zip' | 'folder',
             meta,
-            options: { downloadFolder: prefs.downloadFolder },
+            options: {
+              downloadFolder: prefs.downloadFolder,
+              archiveName: archiveNameInput.value,
+            },
           },
         });
         if (!response.ok) {

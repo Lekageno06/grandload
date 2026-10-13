@@ -10,6 +10,7 @@ export type GalleryItem = {
   height?: number;
   selected?: boolean;
   provenance?: string;
+  badge?: string;
 };
 
 export type GalleryFilterState = {
@@ -29,13 +30,18 @@ export function getVirtualWindow(
   return { start: safeStart, end: Math.min(safeTotal, safeStart + Math.max(1, size)) };
 }
 
-function filteredItems(items: readonly GalleryItem[], state: GalleryFilterState): GalleryItem[] {
+function filteredItems(
+  items: readonly GalleryItem[],
+  state: GalleryFilterState,
+  ordered = false,
+): GalleryItem[] {
   const query = state.search.trim().toLowerCase();
   const result = items.filter(
     (item) =>
       (!query || `${item.label} ${item.url}`.toLowerCase().includes(query)) &&
       (!state.provenance || item.provenance === state.provenance),
   );
+  if (ordered) return result;
   return result.sort((left, right) => {
     const values =
       state.sort === 'name'
@@ -65,13 +71,15 @@ export class ImageGallery {
   private readonly pendingImages: HTMLImageElement[] = [];
   private activeLoads = 0;
   private readonly onSelectionChange: ((items: GalleryItem[]) => void) | undefined;
+  private readonly ordered: boolean;
 
   constructor(
     items: readonly GalleryItem[],
-    options: { onSelectionChange?: (items: GalleryItem[]) => void } = {},
+    options: { onSelectionChange?: (items: GalleryItem[]) => void; ordered?: boolean } = {},
   ) {
     this.items = [...items];
     this.onSelectionChange = options.onSelectionChange;
+    this.ordered = options.ordered ?? false;
     this.element = h('section', {
       className: 'ui-image-gallery',
       'aria-label': 'Galerie d’images',
@@ -100,7 +108,7 @@ export class ImageGallery {
     this.render();
   }
   get filtered(): GalleryItem[] {
-    return filteredItems(this.items, this.state);
+    return filteredItems(this.items, this.state, this.ordered);
   }
 
   private render(): void {
@@ -165,6 +173,7 @@ export class ImageGallery {
       item.provenance
         ? h('span', { className: 'ui-badge ui-badge--neutral' }, `Provenance : ${item.provenance}`)
         : null,
+      item.badge ? h('span', { className: 'ui-badge ui-badge--warning' }, item.badge) : null,
     );
     card.append(check, image, body);
     return card;

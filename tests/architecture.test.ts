@@ -10,6 +10,13 @@ function sourceFiles(directory: string): string[] {
 }
 
 describe('architecture de collecte DOM', () => {
+  it('garde la collecte du chapitre derrière le content reader', () => {
+    const chapterModule = fileURLToPath(
+      new URL('../src/modules/chapter-download/index.ts', import.meta.url),
+    );
+    expect(readFileSync(chapterModule, 'utf8')).not.toMatch(/querySelectorAll/iu);
+  });
+
   it('interdit la collecte directe d’images hors dom-reader et adaptateurs', () => {
     const srcRoot = fileURLToPath(new URL('../src', import.meta.url));
     const violations = sourceFiles(srcRoot)
