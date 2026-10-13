@@ -1,4 +1,4 @@
-import '../adapters';
+import { adaptersReady } from '../adapters';
 import { getAdapter } from '../core/registry';
 import { toGrandloadError } from '../core/errors';
 import type { MessageKind, MessagePayloadMap, MessageResultMap } from '../core/messaging';
@@ -23,6 +23,7 @@ function isContentRequest(value: unknown): value is ContentRequest {
 async function handleContentRequest<
   T extends 'READ_SERIES' | 'READ_CHAPTER_PAGES' | 'READ_CHAPTER_META' | 'READ_PAGE_ASSETS' | 'STOP_PAGE_ASSETS',
 >(type: T, payload: MessagePayloadMap[T]): Promise<MessageResultMap[T]> {
+  await adaptersReady;
   if (type === 'STOP_PAGE_ASSETS') {
     activeAssetScan?.abort();
     return undefined as MessageResultMap[T];

@@ -1,4 +1,4 @@
-import '../adapters';
+import { adaptersReady } from '../adapters';
 import '../modules';
 import './shell.css';
 import { send } from '../core/messaging';
@@ -266,6 +266,7 @@ function renderModules(
 }
 
 async function initializePanel(): Promise<void> {
+  await adaptersReady;
   const sequence = ++refreshSequence;
   renderBuildInfo();
   renderJobs();

@@ -6,11 +6,12 @@ declare const __GRANDLOAD_PRIVATE__: boolean;
 
 registerAdapter(genericAdapter);
 registerAdapter(mangasOriginesAdapter);
-if (typeof __GRANDLOAD_PRIVATE__ !== 'undefined' && __GRANDLOAD_PRIVATE__) {
-  void import('./private').then(({ hentaiOriginesAdapter, hentaiScantradAdapter }) => {
+export const adaptersReady: Promise<void> =
+  typeof __GRANDLOAD_PRIVATE__ !== 'undefined' && __GRANDLOAD_PRIVATE__
+    ? import('./private').then(({ hentaiOriginesAdapter, hentaiScantradAdapter }) => {
     registerAdapter(hentaiOriginesAdapter);
     registerAdapter(hentaiScantradAdapter);
-  });
-}
+      })
+    : Promise.resolve();
 
 export { genericAdapter, mangasOriginesAdapter };
