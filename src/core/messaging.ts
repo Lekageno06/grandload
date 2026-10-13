@@ -15,6 +15,8 @@ export type MessageKind =
   | 'READ_CHAPTER_META'
   | 'READ_PAGE_ASSETS'
   | 'STOP_PAGE_ASSETS'
+  | 'SCAN_START'
+  | 'SCAN_CANCEL'
   | 'READ_SERIES'
   | 'JOB_CREATE'
   | 'JOB_CONTROL'
@@ -31,6 +33,8 @@ export interface MessagePayloadMap {
   READ_CHAPTER_META: { adapterId: string };
   READ_PAGE_ASSETS: { pageUrl: string; loadLazy?: boolean };
   STOP_PAGE_ASSETS: Record<string, never>;
+  SCAN_START: { scanId: string; pageUrl: string; loadLazy?: boolean };
+  SCAN_CANCEL: { scanId: string };
   READ_SERIES: { adapterId: string };
   JOB_CREATE: { kind: 'chapter' | 'series' | 'links'; params: Record<string, unknown> };
   JOB_CONTROL: { jobId: string; action: 'pause' | 'resume' | 'cancel' | 'retry' };
@@ -63,6 +67,8 @@ export interface MessageResultMap {
   READ_CHAPTER_META: import('./types').ChapterMeta;
   READ_PAGE_ASSETS: import('../modules/generic-scan/types').ScanItem[];
   STOP_PAGE_ASSETS: void;
+  SCAN_START: { scanId: string };
+  SCAN_CANCEL: { ok: boolean };
   READ_SERIES: SeriesInfo;
   JOB_CREATE: { jobId: string };
   JOB_CONTROL: { ok: boolean };

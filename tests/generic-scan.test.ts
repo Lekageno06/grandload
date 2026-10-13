@@ -13,9 +13,14 @@ import { genericAdapter } from '../src/adapters/generic';
 import type { ScanItem } from '../src/modules/generic-scan/types';
 import { JSDOM } from 'jsdom';
 import { dedupeUrls, getBestSrcsetCandidate, normalizeUrl } from '../src/shared/url-utils';
-import genericScanModule from '../src/modules/generic-scan';
+import genericScanModule, { isCurrentScanEvent } from '../src/modules/generic-scan';
 
 describe('états du scan générique', () => {
+  it('ignore les événements d’un autre scan ou d’un autre onglet', () => {
+    expect(isCurrentScanEvent('scan-1', 'scan-1', 4, 4)).toBe(true);
+    expect(isCurrentScanEvent('scan-old', 'scan-1', 4, 4)).toBe(false);
+    expect(isCurrentScanEvent('scan-1', 'scan-1', 5, 4)).toBe(false);
+  });
   it('reste disponible sur toute page HTTP ou HTTPS, indépendamment du site adapté', () => {
     expect(genericScanModule.canHandle({
       url: 'https://news.example/article/42', kind: 'other', adapterId: 'generic', tabId: 1,

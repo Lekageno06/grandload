@@ -7,6 +7,92 @@ import { autoScrollUntilStable } from './scroll-loader';
 
 type ContentRequest = { type: MessageKind; payload: Record<string, unknown> };
 let activeAssetScan: AbortController | undefined;
+let activeScanId: string | undefined;
+
+function debugScan(message: string, data: Record<string, unknown> = {}): void {
+  console.info('[Grandload][debug][scan]', message, data);
+}
+
+function emitScanEvent(type: 'SCAN_PROGRESS' | 'SCAN_RESULT', payload: Record<string, unknown>): void {
+  try {
+    chrome.runtime.sendMessage({ type, payload }, () => {
+      const error = chrome.runtime.lastError;
+      if (error) debugScan('fermeture du canal événementiel', { type, cause: error.message });
+    });
+  } catch (error) {
+    debugScan('exception pendant l’émission d’un événement', {
+      type,
+      cause: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+function reply(sendResponse: (response: unknown) => void, response: unknown): void {
+  try {
+    sendResponse(response);
+  } catch (error) {
+    debugScan('cause de fermeture du canal lors de sendResponse', {
+      cause: error instanceof Error ? error.message : String(error),
+    });
+  } finally {
+    // Le callback Chrome ne doit être appelé qu’une seule fois.
+  }
+}
+
+function startGenericScan(scanId: string, pageUrl: string, loadLazy: boolean): void {
+  activeAssetScan?.abort();
+  const controller = new AbortController();
+  activeAssetScan = controller;
+  activeScanId = scanId;
+  const startedAt = performance.now();
+  debugScan('début du scan', { scanId, loadLazy });
+  void (async () => {
+    try {
+      await adaptersReady;
+      if (loadLazy) {
+        await autoScrollUntilStable({
+          document,
+          ...(document.defaultView ? { windowRef: document.defaultView } : {}),
+          pageCountProvider: () => readPageAssets(document, pageUrl).length,
+          scrollStep: 700,
+          maxScrolls: 20,
+          stabilizationWindow: 2,
+          delayMs: 150,
+          signal: controller.signal,
+          onProgress: (step, count) => emitScanEvent('SCAN_PROGRESS', { scanId, step, count }),
+        });
+      }
+      const items = readPageAssets(document, pageUrl);
+      const cancelled = controller.signal.aborted;
+      debugScan('fin du scan', {
+        scanId,
+        durationMs: Math.round(performance.now() - startedAt),
+        images: items.filter((item) => item.type === 'image').length,
+        cancelled,
+      });
+      emitScanEvent('SCAN_RESULT', {
+        scanId,
+        items,
+        ...(cancelled ? { warning: 'Chargement des images paresseuses interrompu : résultats partiels' } : {}),
+      });
+    } catch (error) {
+      debugScan('exception pendant le scan', {
+        scanId,
+        durationMs: Math.round(performance.now() - startedAt),
+        cause: error instanceof Error ? error.message : String(error),
+      });
+      emitScanEvent('SCAN_RESULT', {
+        scanId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      if (activeScanId === scanId) {
+        activeAssetScan = undefined;
+        activeScanId = undefined;
+      }
+    }
+  })();
+}
 
 function isContentRequest(value: unknown): value is ContentRequest {
   return (
@@ -82,15 +168,49 @@ async function handleContentRequest<
 }
 
 const contentGlobal = globalThis as typeof globalThis & { __grandloadContentReader?: boolean };
+const existingListenerCount = contentGlobal.__grandloadContentReader ? 1 : 0;
+debugScan('injection de content.js', {
+  listenersAlreadyPresent: existingListenerCount,
+  frame: 0,
+});
 if (!contentGlobal.__grandloadContentReader) {
   contentGlobal.__grandloadContentReader = true;
   chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
     if (!isContentRequest(message)) {
       return false;
     }
+    if (message.type === 'SCAN_START') {
+      try {
+        const payload = message.payload as { scanId?: unknown; pageUrl?: unknown; loadLazy?: unknown };
+        if (typeof payload.scanId !== 'string' || typeof payload.pageUrl !== 'string') {
+          throw new Error('Paramètres de scan invalides.');
+        }
+        reply(sendResponse, { ok: true, data: { scanId: payload.scanId } });
+        startGenericScan(payload.scanId, payload.pageUrl, payload.loadLazy === true);
+      } catch (error) {
+        debugScan('exception avant réponse SCAN_START', {
+          cause: error instanceof Error ? error.message : String(error),
+        });
+        reply(sendResponse, {
+          ok: false,
+          error: { code: 'UNKNOWN', message: error instanceof Error ? error.message : String(error) },
+        });
+      }
+      return false;
+    }
+    if (message.type === 'SCAN_CANCEL') {
+      try {
+        const payload = message.payload as { scanId?: unknown };
+        if (payload.scanId === activeScanId) activeAssetScan?.abort();
+        reply(sendResponse, { ok: true, data: { ok: true } });
+      } catch (error) {
+        reply(sendResponse, { ok: false, error: { code: 'UNKNOWN', message: error instanceof Error ? error.message : String(error) } });
+      }
+      return false;
+    }
     if (message.type === 'STOP_PAGE_ASSETS') {
       activeAssetScan?.abort();
-      sendResponse({ ok: true });
+      reply(sendResponse, { ok: true });
       return false;
     }
     if (
@@ -106,15 +226,31 @@ if (!contentGlobal.__grandloadContentReader) {
       message.type,
       message.payload as MessagePayloadMap[typeof message.type],
     )
-      .then((data) => sendResponse({ ok: true, data }))
+        .then((data) => reply(sendResponse, { ok: true, data }))
       .catch((error: unknown) => {
         const normalized = toGrandloadError(error, 'ADAPTER_STRUCTURE');
-        sendResponse({
+          reply(sendResponse, {
           ok: false,
           error: { code: normalized.code, message: normalized.message },
         });
       });
     return true;
+  });
+}
+
+try {
+  chrome.runtime.sendMessage(
+    {
+      type: 'CONTENT_READER_READY',
+      payload: { listeners: existingListenerCount, frame: 0 },
+    },
+    () => {
+      void chrome.runtime.lastError;
+    },
+  );
+} catch (error) {
+  debugScan('exception pendant le journal de ready', {
+    cause: error instanceof Error ? error.message : String(error),
   });
 }
 

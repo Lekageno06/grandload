@@ -28,8 +28,18 @@ type ModuleState = {
   filters: ScanFilterState;
 };
 
+export function isCurrentScanEvent(
+  eventScanId: string,
+  currentScanId: string | undefined,
+  eventTabId: number | undefined,
+  currentTabId: number,
+): boolean {
+  return eventScanId === currentScanId && eventTabId === currentTabId;
+}
+
 function injectContentReader(tabId: number): Promise<void> {
   return new Promise<void>((resolve, reject) => {
+    console.info('[Grandload][debug][scan] injection content.js', { tabId, frame: 0 });
     chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] }, () => {
       const error = chrome.runtime.lastError;
       if (error) {
@@ -41,44 +51,72 @@ function injectContentReader(tabId: number): Promise<void> {
   });
 }
 
+type ScanEventResult = { items: ScanItem[]; warning?: string };
+
 function scanCurrentPageInTab(
   tabId: number,
   pageUrl: string,
   loadLazy: boolean,
-): Promise<ScanItem[]> {
-  const request = (lazy: boolean): Promise<ScanItem[]> =>
-    new Promise<ScanItem[]>((resolve, reject) => {
+  scanId: string,
+  onProgress: (step: number, count: number) => void,
+): Promise<ScanEventResult> {
+  return new Promise<ScanEventResult>((resolve, reject) => {
+    let settled = false;
+    const startedAt = performance.now();
+    const finish = (callback: () => void): void => {
+      if (settled) return;
+      settled = true;
+      chrome.runtime.onMessage.removeListener(onEvent);
+      callback();
+    };
+    const onEvent = (message: unknown, sender: chrome.runtime.MessageSender): void => {
+      if (sender.tab?.id !== tabId || typeof message !== 'object' || message === null || !('type' in message)) return;
+      const typed = message as { type?: unknown; payload?: { scanId?: unknown; step?: unknown; count?: unknown; items?: unknown; error?: unknown; warning?: unknown } };
+      const payload = typed.payload;
+      if (!payload || !isCurrentScanEvent(String(payload.scanId ?? ''), scanId, sender.tab?.id, tabId)) return;
+      if (typed.type === 'SCAN_PROGRESS') {
+        onProgress(Number(payload.step) || 0, Number(payload.count) || 0);
+        return;
+      }
+      if (typed.type !== 'SCAN_RESULT') return;
+      if (typeof payload.error === 'string') {
+        console.info('[Grandload][debug][scan] fermeture/échec du scan', { tabId, scanId, cause: payload.error });
+        finish(() => reject(new Error(payload.error as string)));
+        return;
+      }
+      const items = Array.isArray(payload.items) ? payload.items as ScanItem[] : [];
+      console.info('[Grandload][debug][scan] résultat reçu', { tabId, scanId, durationMs: Math.round(performance.now() - startedAt), images: items.filter((item) => item.type === 'image').length });
+      finish(() => resolve({ items, ...(typeof payload.warning === 'string' ? { warning: payload.warning } : {}) }));
+    };
+    chrome.runtime.onMessage.addListener(onEvent);
+    void injectContentReader(tabId).then(() => {
       chrome.tabs.sendMessage(
         tabId,
-        { type: 'READ_PAGE_ASSETS', payload: { pageUrl, loadLazy: lazy } },
-        (response: { ok?: boolean; data?: ScanItem[] } | undefined) => {
+        { type: 'SCAN_START', payload: { scanId, pageUrl, loadLazy } },
+        (response: { ok?: boolean; data?: { scanId?: string }; error?: { message?: string } } | undefined) => {
           const runtimeError = chrome.runtime.lastError;
           if (runtimeError) {
-            reject(new Error(runtimeError.message ?? 'Lecture de la page impossible.'));
+            console.info('[Grandload][debug][scan] fermeture du canal de démarrage', { tabId, scanId, cause: runtimeError.message });
+            if (loadLazy && /channel closed|message port closed|returning true/iu.test(runtimeError.message ?? '')) {
+              finish(() => {
+                void scanCurrentPageInTab(tabId, pageUrl, false, scanId, onProgress)
+                  .then((result) => resolve({
+                    ...result,
+                    warning: 'Chargement des images paresseuses interrompu : résultats partiels',
+                  }))
+                  .catch(reject);
+              });
+            } else {
+              finish(() => reject(new Error(runtimeError.message ?? 'Lecture de la page impossible.')));
+            }
             return;
           }
-          if (!response?.ok || !response.data) {
-            reject(new Error('Lecture de la page impossible.'));
-            return;
+          if (!response?.ok || response.data?.scanId !== scanId) {
+            finish(() => reject(new Error(response?.error?.message ?? 'Le scan n’a pas pu démarrer.')));
           }
-          resolve(response.data);
         },
       );
-    });
-
-  return injectContentReader(tabId).then(async () => {
-    try {
-      return await request(loadLazy);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (!loadLazy || !/message channel closed|message port closed|returning true/iu.test(message)) {
-        throw error;
-      }
-      // Certains lecteurs remplacent le document pendant le défilement lazy :
-      // relire immédiatement le DOM courant garantit un résultat exploitable.
-      await injectContentReader(tabId);
-      return await request(false);
-    }
+    }).catch((error: unknown) => finish(() => reject(error)));
   });
 }
 
@@ -101,9 +139,11 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
     selectedIds: new Set<string>(),
     filters: { type: 'all', extension: '', text: '' },
   };
+  let activeScanId: string | undefined;
+  let loadSequence = 0;
 
   const wrapper = document.createElement('div');
-  wrapper.className = 'ui-stack';
+  wrapper.className = 'ui-stack generic-scan-panel';
   root.appendChild(wrapper);
 
   const tabs = createTabs(['Images', 'Liens et médias']);
@@ -137,6 +177,24 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
     scanState.textContent = `Scan en cours… étape ${payload?.step ?? 0}, ${payload?.count ?? 0} ressource(s) détectée(s).`;
   };
   chrome.runtime.onMessage?.addListener(progressListener);
+  chrome.runtime.onMessage?.addListener((message: unknown, sender: chrome.runtime.MessageSender) => {
+    if (
+      typeof message === 'object' &&
+      message !== null &&
+      'type' in message &&
+      message.type === 'CONTENT_READER_READY' &&
+      sender.tab?.id === ctx.tabId
+    ) {
+      const payload = 'payload' in message && typeof message.payload === 'object' && message.payload !== null
+        ? message.payload as { listeners?: number; frame?: number }
+        : {};
+      console.info('[Grandload][debug][scan] content.js prêt', {
+        tabId: ctx.tabId,
+        frame: payload.frame ?? 0,
+        listeners: payload.listeners ?? 0,
+      });
+    }
+  });
 
   const stopScanButton = document.createElement('button');
   stopScanButton.type = 'button';
@@ -157,7 +215,7 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
   wrapper.appendChild(lazyLabel);
 
   const filterPanel = document.createElement('div');
-  filterPanel.className = 'row g-2';
+  filterPanel.className = 'row g-2 generic-scan-filter-panel';
   wrapper.appendChild(filterPanel);
 
   const typeFilter = document.createElement('select');
@@ -262,7 +320,7 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
   }
 
   const downloadSheet = document.createElement('section');
-  downloadSheet.className = 'ui-download-sheet border rounded p-3 d-grid gap-2';
+  downloadSheet.className = 'ui-download-sheet generic-scan-download-sheet border rounded p-3 d-grid gap-2';
   const downloadSheetTitle = document.createElement('strong');
   downloadSheetTitle.textContent = 'Téléchargement';
   const formatSelect = document.createElement('select');
@@ -671,7 +729,7 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
     }
 
     const setScanState = (viewState: ScanViewState, count = 0): void => {
-      scanState.textContent = getScanStateMessage(viewState, count);
+      scanState.textContent = viewState === 'error' ? '' : getScanStateMessage(viewState, count);
       scanState.dataset.state = viewState;
       scanState.className = `ui-scan-state ui-muted mb-0${
         viewState === 'error' || viewState === 'permission' ? ' text-danger' : ''
@@ -681,15 +739,40 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
 
     setScanState('loading');
     renderSkeletons();
+    emptyMessage.hidden = true;
+    stopScanButton.disabled = false;
+    wrapper.querySelector('.generic-scan-partial-warning')?.remove();
+    const sequence = ++loadSequence;
+    const scanId = `scan-${Date.now()}-${sequence}`;
+    activeScanId = scanId;
     try {
-      const results = await scanCurrentPageInTab(ctx.tabId, ctx.url, lazyCheckbox.checked);
+      const result = await scanCurrentPageInTab(
+        ctx.tabId,
+        ctx.url,
+        lazyCheckbox.checked,
+        scanId,
+        (step, count) => {
+          if (sequence === loadSequence) {
+            scanState.textContent = `Scan en cours… étape ${step}, ${count} ressource(s) détectée(s).`;
+          }
+        },
+      );
+      if (sequence !== loadSequence || activeScanId !== scanId) return;
+      const results = result.items;
       state.items = results;
       renderBadges();
       renderList();
       renderGallery();
       updateButtons();
       setScanState(results.length === 0 ? 'empty' : 'results', results.length);
+      if (result.warning) {
+        const warning = document.createElement('p');
+        warning.className = 'alert alert-warning mb-0 generic-scan-partial-warning';
+        warning.textContent = result.warning;
+        wrapper.insertBefore(warning, filterPanel);
+      }
     } catch (error: unknown) {
+      if (sequence !== loadSequence || activeScanId !== scanId) return;
       const permission = isPermissionError(error);
       setScanState(permission ? 'permission' : 'error');
       emptyMessage.hidden = false;
@@ -717,6 +800,13 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
           });
         });
         emptyMessage.appendChild(authorize);
+      } else {
+        const retry = document.createElement('button');
+        retry.type = 'button';
+        retry.className = 'ui-button ui-button--secondary';
+        retry.textContent = 'Réessayer';
+        retry.addEventListener('click', () => void load());
+        emptyMessage.appendChild(retry);
       }
       updateButtons();
     }
@@ -724,7 +814,10 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
 
   stopScanButton.addEventListener('click', () => {
     stopScanButton.disabled = true;
-    chrome.tabs.sendMessage(ctx.tabId, { type: 'STOP_PAGE_ASSETS', payload: {} });
+    if (activeScanId) {
+      chrome.tabs.sendMessage(ctx.tabId, { type: 'SCAN_CANCEL', payload: { scanId: activeScanId } });
+      activeScanId = undefined;
+    }
     api.setStatus?.('Arrêt du chargement des images demandé.');
   });
 
@@ -738,7 +831,7 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
 
 export const genericScanModule: GrandloadModule = {
   id: 'generic-scan',
-  title: 'Liens et médias',
+  title: 'Scan',
   priority: 10,
   canHandle: (ctx: PageContext) => /^https?:\/\//.test(ctx.url),
   mountPanel: (root: HTMLElement, ctx: PageContext, api: ModuleApi): void => {

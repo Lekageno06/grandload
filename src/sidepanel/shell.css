@@ -42,6 +42,18 @@ body { min-width: 320px; min-height: 100vh; container-type: inline-size; }
 .ui-resource-item__meta { overflow: hidden; color: var(--text-muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .ui-resource-item__content .ui-badge { width: fit-content; }
 .ui-resource-item__check { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
+.generic-scan-panel { min-width: 0; overflow: hidden; }
+.generic-scan-panel > .ui-actions { position: static; justify-content: flex-start; flex-wrap: wrap; box-shadow: none; }
+.generic-scan-panel > .ui-actions > button { flex: 0 1 auto; min-width: 0; }
+.generic-scan-filter-panel { min-width: 0; margin: 0; }
+.generic-scan-filter-panel > * { min-width: 0; }
+.generic-scan-download-sheet { min-width: 0; overflow: hidden; }
+.generic-scan-download-sheet > * { min-width: 0; max-width: 100%; }
+.generic-scan-panel .alert { overflow-wrap: anywhere; }
+@container (max-width: 420px) {
+  .generic-scan-panel > .ui-actions { align-items: stretch; }
+  .generic-scan-panel > .ui-actions > button { flex: 1 1 calc(50% - 8px); }
+}
 @keyframes panel-enter { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) { .panel-content { animation: none; } }
 @container (max-width: 380px) { .panel-header { align-items: flex-start; flex-direction: column; } .panel-version { align-self: flex-end; margin-top: -34px; } .panel-action-bar { align-items: stretch; flex-direction: column; } }
