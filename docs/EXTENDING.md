@@ -11,7 +11,7 @@ Principe : **ajouter une capacité = ajouter un fichier + une ligne d'enregistre
 ## Ajouter un format d'archive (packager)
 1. Créer `src/packagers/<format>.ts` implémentant `Packager` (`id`, `extension`, `pack`).
 2. L'enregistrer dans `src/packagers/index.ts`.
-3. Il apparaît automatiquement dans la liste des formats de la popup.
+3. Il apparaît automatiquement dans la liste des formats du Side Panel.
 Exemples de formats futurs : PDF, EPUB, dossier d'images.
 
 ## Ajouter une fonctionnalité (module)

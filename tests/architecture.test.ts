@@ -10,6 +10,20 @@ function sourceFiles(directory: string): string[] {
 }
 
 describe('architecture de collecte DOM', () => {
+  it('utilise le Side Panel et le design system natif sans Bootstrap', () => {
+    const manifest = readFileSync(
+      fileURLToPath(new URL('../public/manifest.json', import.meta.url)),
+      'utf8',
+    );
+    const packageJson = readFileSync(
+      fileURLToPath(new URL('../package.json', import.meta.url)),
+      'utf8',
+    );
+    expect(manifest).toContain('side_panel');
+    expect(manifest).not.toContain('default_popup');
+    expect(packageJson).not.toContain('"bootstrap"');
+  });
+
   it('garde la collecte du chapitre derrière le content reader', () => {
     const chapterModule = fileURLToPath(
       new URL('../src/modules/chapter-download/index.ts', import.meta.url),

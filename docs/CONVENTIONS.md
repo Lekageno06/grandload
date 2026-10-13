@@ -10,8 +10,8 @@
 - Dépendances npm : validation requise avant tout ajout (fflate, esbuild, vitest, eslint, prettier, typescript, @types/chrome)
 
 ## Interface
-- Bootstrap 5 CSS local ; popup 420 px de large, contenu scrollable
-- Composants : `btn`, `badge`, `list-group`, `form-check`, `progress`, `alert`, `nav-tabs`, grille de miniatures
+- Side Panel responsive (320–700 px), contenu scrollable
+- Composants et tokens du design system de `src/ui/`, CSS natif uniquement ; aucune dépendance Bootstrap
 - Textes uniquement via `i18n.ts` ; accessibilité (labels, focus clavier, contraste)
 
 ## Tests
@@ -40,6 +40,6 @@
 - [ ] Chapitre avec lazy-loading : toutes les planches détectées
 - [ ] Série : liste complète (≥ 150 chapitres), chapitre décimal bien placé (129.5 entre 129 et 130)
 - [ ] Série : sélection d'une plage de 3 chapitres → 3 CBZ distincts
-- [ ] Pause / reprise / annulation ; fermeture de la popup pendant un job
+- [ ] Pause / reprise / annulation ; fermeture du Side Panel pendant un job
 - [ ] Redémarrage forcé du Service Worker pendant un job : reprise
 - [ ] Erreur simulée (image 404) : chapitre en échec, pas d'archive incomplète

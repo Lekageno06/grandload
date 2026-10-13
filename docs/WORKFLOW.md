@@ -1,73 +1,33 @@
 # Workflow — Grandload
 
-## 1. Parcours utilisateur
+## Parcours utilisateur
 
-### A. Mode Chapitre (page `/chapitre-N/`)
-```
-Ouverture de la popup
-   │  détection : kind = chapter (adaptateur du site)
-   ▼
-Demande d'accès au site (1re fois) ──► chrome.permissions.request
-   ▼
-Lecture des planches (ordre de lecture) + auto-scroll si lazy-loading
-   ▼
-Grille de miniatures : numéro, case « inclure », pré-exclusions signalées
-   │   actions : tout / aucune / inverser / exclure avant-après ici
-   ▼
-Choix : format (CBZ défaut · ZIP · dossier), dossier de sortie
-   ▼
-[Télécharger] ──► job « chapitre » ──► progression ──► fichier dans Téléchargements
-```
+Le Side Panel détecte le contexte de l'onglet, demande l'accès au domaine uniquement après clic,
+puis affiche le module générique, chapitre ou série applicable. La zone Tâches reste accessible
+pendant les changements d'onglet.
 
-### B. Mode Série (page `/oeuvre/<slug>/`)
-```
-Ouverture de la popup
-   │  détection : kind = series
-   ▼
-Liste complète des chapitres (tri numérique, décimaux inclus)
-   │   sélection : tout · plage de/à · cases · « non téléchargés seulement »
-   ▼
-[Télécharger la sélection] ──► job « série » ──► un job « chapitre » par élément
-   │   progression globale + par chapitre · pause · reprise · annulation
-   ▼
-Récapitulatif : réussis / échecs ──► [Relancer les échecs]
-```
+Pour un chapitre : lecture DOM via l'adaptateur, galerie ordonnée, pré-exclusions visibles,
+sélection, feuille de téléchargement, job persistant, archive puis livraison par la destination.
 
-### C. Mode Générique (toute autre page http/https)
-Scan des liens et médias → filtres → sélection → téléchargement, copie ou export TXT/JSON/CSV.
+Pour une série : lecture de la liste complète, sélection de chapitres, confirmation si nécessaire,
+création d'un job parent et d'un job enfant par chapitre, progression globale, pause/reprise,
+annulation, historique et récapitulatif.
 
-## 2. Flux technique — Chapitre
-1. `popup` envoie `PAGE_CONTEXT` ; le bg résout l'adaptateur (`matches` + `classify`).
-2. `popup` demande l'accès au domaine si absent (clic utilisateur obligatoire).
-3. Le bg injecte `content.js` (`chrome.scripting.executeScript`).
-4. `content` : `adapter.prepareChapter` (auto-scroll) puis `adapter.readChapterPages` → `PageRef[]`.
-5. `popup` affiche la grille ; l'utilisateur exclut des planches.
-6. `JOB_CREATE(kind=chapter)` : le bg persiste le job et s'assure que l'offscreen document existe.
-7. `BUILD_ARCHIVE` : l'offscreen télécharge les images (concurrence 3, 2 retries), vérifie les types, assemble l'archive via le packager, crée un `blobUrl`.
-8. Le bg appelle `chrome.downloads.download({ url: blobUrl, filename, conflictAction: 'uniquify' })`, attend `onChanged = complete`, révoque le blob, passe le job à `done`.
+Pour le scan générique : collecte unique via `src/content/dom-reader.ts`, badges de provenance,
+filtres, sélection, exports TXT/JSON/CSV et téléchargement des médias choisis.
 
-## 3. Flux technique — Série
-1. `READ_SERIES` → `SeriesInfo` (liste de chapitres dédoublonnée et triée).
-2. L'utilisateur sélectionne ; `JOB_CREATE(kind=series)` crée un job parent et un job enfant par chapitre (`queued`).
-3. L'orchestrateur traite **un chapitre à la fois** :
-   - stratégie `live-dom` : ouvre un onglet **inactif** (`chrome.tabs.create({ active:false })`), injecte `content.js`, lit les planches, ferme l'onglet ;
-   - stratégie `html-parse` : récupère le HTML, le parse dans l'offscreen (`DOMParser`) et lit les planches sans onglet.
-4. Application des exclusions mémorisées (RG-107) ; génération de l'archive comme en §2 (étapes 7-8).
-5. Pause de 1,5 s entre chapitres ; backoff exponentiel sur 429/503 (RG-206).
-6. Mise à jour de l'historique `history:<série>` à chaque chapitre terminé.
-7. Fin : job parent `done` (ou `failed` si tous échouent) et récapitulatif.
+## Flux technique
 
-## 4. Reprise après arrêt du Service Worker
-Chaque transition de job est écrite dans `storage.local`. Au réveil (`onStartup`, message, événement `downloads`), l'orchestrateur relit les jobs `running`, les repasse en `queued` et reprend au chapitre non terminé.
+1. Le Side Panel envoie `PAGE_CONTEXT`; le Worker résout l'adaptateur.
+2. Le content script lit les pages via `dom-reader.ts` et l'adaptateur sans collecte parallèle.
+3. `JOB_CREATE` persiste le job dans `chrome.storage.local`.
+4. Chrome construit l'archive dans l'offscreen ; Firefox utilise la page d'événement.
+5. Le packager produit ZIP, CBZ ou fichiers ; la destination applique le gabarit.
+6. Un job personnalisé vérifie `queryPermission`; sinon il passe à `needs-permission`.
+7. Le Worker publie la progression, attend la fin, révoque les blobs et écrit l'historique.
 
-## 5. Cas limites
-- Page non scannable (`chrome://`, store, `file://`) : message clair (RG-01)
-- Permission de domaine refusée : explication + bouton pour réessayer
-- Chapitre sans image / en cours de publication : alerte, pas d'archive (RG-109, RG-210)
-- Mode « page par page » du site : l'adaptateur lit toutes les planches sans modifier durablement la préférence de l'utilisateur (RG-103)
-- Image en échec après retries : chapitre en échec, pas d'archive incomplète silencieuse (RG-306)
-- Popup fermée : les jobs continuent ; l'état est visible à la réouverture
-- Plus de 20 chapitres sélectionnés : confirmation (RG-211)
+## Reprise et erreurs
 
-## 6. Branches Git
-`main` (stable) ← `develop` ← `feat/<sujet>`, `fix/<sujet>`, `docs/<sujet>`
+Chaque transition est persistée. Au redémarrage du Worker, les jobs interrompus sont relus et
+repris ou marqués en échec selon leur dernière étape. Une erreur d'image ou de destination ne
+produit jamais d'archive incomplète silencieuse.

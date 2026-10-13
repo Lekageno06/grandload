@@ -31,7 +31,7 @@ Site de référence pour les tests : `mangas-origines.fr` (page œuvre `/oeuvre/
 - **TypeScript** (strict) — un seul langage pour tout le projet, aucun autre n'est nécessaire
 - **esbuild** pour le bundling (sortie dans `dist/`, c'est ce dossier qu'on charge dans le navigateur)
 - **fflate** pour fabriquer les ZIP/CBZ
-- **Bootstrap 5 (CSS)** embarqué localement ; UI en TypeScript sans framework
+- UI en TypeScript + CSS natif et design system local (`src/ui/`), sans framework ni Bootstrap
 - **Vitest** (tests unitaires), **ESLint + Prettier**
 - Git / GitHub / VS Code. Cible : Chrome/Edge d'abord, Firefox ensuite.
 
@@ -40,7 +40,7 @@ Site de référence pour les tests : `mangas-origines.fr` (page œuvre `/oeuvre/
 1. **Manifest V3** : Service Worker, pas de background page, pas de code distant, pas d'`eval`.
 2. **Permissions minimales** : `activeTab`, `scripting`, `downloads`, `storage`, `offscreen` + `optional_host_permissions` demandées par domaine à la demande. Toute autre permission = à signaler et justifier avant de l'ajouter.
 3. **Le Service Worker n'a aucun état en mémoire** : état persistant dans `chrome.storage.session` / `local`. Il peut être arrêté à tout moment.
-4. **Le travail lourd (fetch massif d'images, ZIP) se fait dans l'offscreen document**, jamais dans la popup ni dans le Service Worker.
+4. **Le travail lourd (fetch massif d'images, ZIP) se fait dans l'offscreen document**, jamais dans le Side Panel ni dans le Service Worker.
 5. **Noyau (`src/core`) indépendant** : il ne connaît ni site ni module concret. Les fonctionnalités sont des **modules** (`src/modules/*`), les sites des **adaptateurs** (`src/adapters/*`), les formats des **packagers** (`src/packagers/*`).
 6. **Pas d'import croisé entre modules** : communication par messages typés et services du noyau.
 7. Les adaptateurs de site sont des **fonctions pures** testables (le DOM est injecté), sans appel direct à `chrome.*`.

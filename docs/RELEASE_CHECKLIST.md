@@ -30,7 +30,7 @@
 - [ ] Chapitre lazy-loading : toutes les planches sont détectées.
 - [ ] Série : liste complète et tri décimal correct (`129.5` entre `129` et `130`).
 - [ ] Série : plage de trois chapitres produit trois archives distinctes.
-- [ ] Pause, reprise, annulation et fermeture de la popup.
+- [ ] Pause, reprise, annulation et fermeture du Side Panel.
 - [ ] Redémarrage forcé du contexte d'arrière-plan pendant un job.
 - [ ] Erreur d'image : chapitre en échec, aucune archive incomplète.
 - [ ] Firefox : archive créée sans `offscreen`, téléchargement et révocation testés.

@@ -1,128 +1,51 @@
 # Règles de gestion — Grandload
 
-Format : **RG-xxx** — énoncé. Priorité : 🔴 MVP · 🟡 v1.1 · 🟢 plus tard.
-L'agent cite les RG implémentées dans ses commits.
+## Acquisition et collecte
 
-## A. Scan générique
-- **RG-01** 🔴 Scan autorisé uniquement sur pages `http:`/`https:`. Sinon : message « Cette page ne peut pas être analysée ».
-- **RG-02** 🔴 Scan uniquement sur l'onglet actif et sur action de l'utilisateur. Aucun scan en arrière-plan.
-- **RG-03** 🔴 Sources : `a[href]`, `img[src|srcset]`, `picture source[srcset]`, `video`, `audio`, `source`, `link[href]` (icônes), `meta og:image|og:video`, `iframe[src]` (en tant que lien).
-- **RG-04** 🟡 Iframes de même origine scannées ; cross-origin ignorées.
-- **RG-05** 🟡 Extraction des `background-image: url(...)`.
-- **RG-06** 🔴 Attributs lazy lus : `data-src`, `data-original`, `data-lazy-src`, `data-srcset`.
+- **RG-03 / RG-06** : les URL sont normalisées, dédoublonnées et validées avant utilisation.
+- **RG-100 à RG-104** : les planches sont lues dans l'ordre du lecteur et le lazy-loading est traité.
+- **RG-106 / RG-107** : les pré-exclusions sont visibles, réversibles et les suggestions mémorisées ne sont jamais appliquées sans affichage.
+- **RG-200 à RG-211** : les séries sont triées numériquement, traitées séquentiellement, contrôlables et historisées.
+- **RG-205** : l'adaptateur déclare `live-dom` ou `html-parse`; un repli vers `live-dom` est utilisé si le HTML brut est insuffisant.
+- **RG-206** : le délai et le backoff respectent les limites du site ; aucune vérification anti-robot n'est contournée.
 
-## B. Normalisation
-- **RG-10** 🔴 URL résolues en absolu via `new URL(valeur, document.baseURI)`.
-- **RG-11** 🔴 Schémas acceptés : `http`, `https`. Rejet de `javascript:`, `mailto:`, `tel:`, `blob:` ; `data:` rejeté par défaut.
-- **RG-12** 🔴 Dédoublonnage sur l'URL sans fragment. Limite d'affichage 5 000, avec avertissement.
-- **RG-13** 🔴 Pour `srcset`, tous les candidats sont extraits ; le plus grand est marqué « meilleure qualité ».
+## Archives et nommage
 
-## C. Classification, filtres, sélection
-- **RG-20** 🔴 Type déterminé par l'extension (hors query), puis par la balise source, sinon `link`/`other`.
-- **RG-21** 🔴 Catégories : image (jpg, jpeg, png, gif, webp, avif, svg, bmp, ico), video (mp4, webm, mkv, mov, avi ; m3u8 = flux non téléchargeable), audio (mp3, wav, ogg, m4a, flac, aac), document (pdf, doc(x), xls(x), ppt(x), txt, csv), archive (zip, rar, 7z, tar, gz), link.
-- **RG-23** 🔴 Filtres cumulables : type, extension, texte (insensible à la casse).
-- **RG-24** 🟡 Filtre regex ; regex invalide = message inline, jamais de plantage.
-- **RG-25** 🔴 Compteurs par type en badges, mis à jour selon les filtres.
-- **RG-26** 🔴 Sélection : individuelle, tout, aucun, inverser. « Tout » = éléments filtrés visibles.
-- **RG-27** 🔴 Actions désactivées si la sélection est vide.
+- **RG-300** : les formats CBZ, ZIP et dossier sont disponibles ; CBZ est le format par défaut.
+- **RG-301 / RG-302** : une archive est produite par chapitre ; les entrées suivent l'ordre de lecture et utilisent un remplissage d'au moins trois chiffres.
+- **RG-303** : le chemin est produit par la destination active et son gabarit validé RG-32 ; le nom de chapitre est nettoyé.
+- **RG-305** : la construction lourde s'effectue dans l'offscreen Chrome ou dans la page d'événement Firefox.
+- **RG-306 / RG-307** : une erreur d'image fait échouer le chapitre sans archive incomplète ; les réponses doivent être des images non vides.
+- **RG-308 à RG-310** : les tailles importantes sont signalées, les blobs sont révoqués et les conflits sont suffixés.
 
-## D. Téléchargement de fichiers (mode générique)
-- **RG-30** 🔴 3 téléchargements simultanés par défaut (réglable 1–6).
-- **RG-31** 🔴 Dossier : `Grandload/<domaine>/`.
-- **RG-32** 🔴 Nom = dernier segment décodé ; caractères `\ / : * ? " < > |` remplacés par `_` ; 150 caractères max ; interdiction de `..`.
-- **RG-33** 🔴 Conflit de nom : `conflictAction: "uniquify"`.
-- **RG-34** 🔴 Échec : 2 ré-essais (1 s puis 3 s) puis statut « échec » avec motif.
-- **RG-35** 🔴 Annulation d'un job ou de toute la file.
-- **RG-37** 🔴 Confirmation au-delà de 50 fichiers.
-- **RG-38** 🟡 Flux `.m3u8`/`.mpd` exclus avec avertissement.
+## Adaptateurs et modularité
 
-## E. Export (mode générique)
-- **RG-40** 🔴 Formats TXT (une URL par ligne), JSON (items complets), CSV (`url,type,ext,source,label`, UTF-8, guillemets échappés).
-- **RG-41** 🔴 « Copier les URL » : une par ligne.
-- **RG-42** 🔴 Export sur la sélection, ou sur la liste filtrée au choix.
+- **RG-400 à RG-404** : un adaptateur est choisi par URL, reste pur et signale clairement les structures inconnues.
+- **RG-500 à RG-503** : les fonctionnalités sont des modules enregistrés ; aucun import direct entre modules ; Préférences reste activé.
 
-## F. Mode Chapitre
-- **RG-100** 🔴 Une page est un chapitre si `adapter.classify(url) === 'chapter'`.
-- **RG-101** 🔴 Les planches sont extraites **dans l'ordre de lecture du site** (ordre du DOM, ou ordre fourni par l'adaptateur). Indices à partir de 1.
-- **RG-102** 🔴 Lazy-loading : lire `src` puis les attributs `data-*` (RG-06). Si des planches restent sans URL, auto-scroll (pas ≈ hauteur de fenêtre, délai 150–300 ms, arrêt quand le nombre de planches est stable sur 2 passes, délai maximal 60 s).
-- **RG-103** 🔴 Si le site propose « défilement » / « page par page », l'adaptateur lit toutes les planches sans modifier durablement la préférence de l'utilisateur ; toute modification temporaire est restaurée.
-- **RG-104** 🔴 Une planche = `{ index, url, ext, width?, height?, included, excludeReason? }`.
-- **RG-105** 🔴 Exclusion manuelle par case ; actions « tout », « aucune », « inverser », « exclure avant/après celle-ci ».
-- **RG-106** 🟡 Pré-exclusion automatique (désactivable, toujours visible et réversible) : largeur < 200 px, URL correspondant aux motifs de l'adaptateur (logo, bannière, avatar), doublon exact consécutif.
-- **RG-107** 🟡 Les exclusions peuvent être mémorisées par site (ex. « dernière planche », motif d'URL) et proposées ensuite comme suggestion.
-- **RG-108** 🟢 Réordonnancement manuel par glisser-déposer.
-- **RG-109** 🔴 Chapitre sans planche : message explicite, aucune archive créée.
-- **RG-110** 🔴 Métadonnées du chapitre : série, numéro, libellé, URL source.
+## Permissions, sécurité et vie privée
 
-## G. Mode Série
-- **RG-200** 🔴 Une page est une série si `adapter.classify(url) === 'series'`.
-- **RG-201** 🔴 Liste des chapitres fournie par l'adaptateur : dédoublonnée par URL, **triée par numéro croissant**, décimaux supportés (`chapitre-129-5` → 129.5), libellé conservé (ex. « Chapitre 130 - Début Saison 2 »).
-- **RG-202** 🔴 La liste est **complète** même si l'interface du site la pagine (« Voir plus ») : l'adaptateur lit le HTML complet ou déclenche le chargement.
-- **RG-203** 🔴 Sélection : tout, plage de/à, cases, « non téléchargés seulement ».
-- **RG-204** 🔴 Traitement séquentiel : 1 chapitre à la fois (réglable jusqu'à 2).
-- **RG-205** 🔴 Acquisition selon `adapter.acquisition` : `live-dom` (onglet inactif unique, fermé après lecture) ou `html-parse` (sans onglet).
-- **RG-206** 🔴 Délai de 1,5 s entre chapitres (réglable) ; sur HTTP 429/503, backoff exponentiel (2 s, 4 s, 8 s… plafond 60 s) puis pause automatique du job.
-- **RG-207** 🔴 L'échec d'un chapitre n'interrompt pas la série ; récapitulatif final et bouton « Relancer les échecs ».
-- **RG-208** 🔴 Historique des chapitres terminés par série ; ignorés par défaut, re-téléchargement possible.
-- **RG-209** 🔴 Pause, reprise, annulation ; reprise après redémarrage du Service Worker.
-- **RG-210** 🟡 Chapitre avec 0 planche ou publication en cours (ex. libellé « Nouveau » sans image) : signalé, non téléchargé.
-- **RG-211** 🔴 Confirmation au-delà de 20 chapitres.
+- **RG-600** : permissions fixes minimales : `activeTab`, `scripting`, `downloads`, `storage`, `offscreen` côté Chrome et `sidePanel` côté Chrome/Edge ; les hôtes sont optionnels et demandés par domaine au clic.
+- **RG-601 / RG-602** : aucun code distant, tracking, appel tiers ou donnée envoyée.
+- **RG-603** : les données de page sont rendues via `textContent` ou des nœuds créés explicitement.
+- **RG-604** : aucune règle réseau spéciale sans justification et documentation.
+- **RG-605** : aucun contournement de connexion, paywall, captcha ou protection anti-robot.
 
-## H. Archives
-- **RG-300** 🔴 Formats : **CBZ (défaut)**, ZIP, dossier d'images. Autres formats via packagers (PDF, EPUB…).
-- **RG-301** 🔴 **Une archive par chapitre.**
-- **RG-302** 🔴 Entrées nommées `001.<ext>`, `002.<ext>`… (remplissage = max(3, nb de chiffres du total)) dans l'ordre de lecture ; extension d'origine conservée ; images stockées sans recompression.
-- **RG-303** 🔴 Nom : `Grandload/<Série>/<Série> - Chapitre <n>.cbz`, partie entière sur 3 chiffres (`012`, `129.5`, `153`). Noms nettoyés selon RG-32.
-- **RG-304** 🟡 `ComicInfo.xml` ajouté aux CBZ (Series, Number, Title, Web, PageCount), activé par défaut.
-- **RG-305** 🔴 Construction **uniquement dans l'offscreen document**.
-- **RG-306** 🔴 Images : concurrence 3, délai max 30 s, 2 ré-essais. Si une image échoue après ré-essais, le chapitre passe en échec ; aucune archive incomplète n'est créée silencieusement (option « créer quand même » en 🟢).
-- **RG-307** 🔴 Chaque réponse doit avoir un type `image/*` et une taille > 0, sinon échec de l'image.
-- **RG-308** 🟡 Avertissement si la taille estimée dépasse 300 Mo ; une seule archive en construction à la fois.
-- **RG-309** 🔴 Le blob URL est révoqué dès que le téléchargement est terminé ou annulé.
-- **RG-310** 🔴 Conflit de nom : `uniquify`.
+## Interface et design system
 
-## I. Adaptateurs de site
-- **RG-400** 🔴 Un adaptateur par site, choisi par `matches(url)` ; sinon adaptateur générique.
-- **RG-401** 🔴 L'adaptateur générique applique des heuristiques : conteneur dominant d'images (le plus grand groupe d'`img` de grande taille dans le contenu principal), exclusion de l'en-tête, du pied de page, des commentaires et des suggestions.
-- **RG-402** 🔴 Ajouter un site ne modifie ni le noyau ni les modules.
-- **RG-403** 🔴 Un adaptateur est pur : DOM injecté, pas d'appel `chrome.*`, testable avec une fixture HTML.
-- **RG-404** 🔴 Structure non reconnue : erreur claire « Structure du site non reconnue » (code `ADAPTER_STRUCTURE`).
+- **RG-700** : interface française ; les textes visibles passent par `src/sidepanel/i18n.ts`.
+- **RG-701** : les vues utilisent les composants de `src/ui/`; aucune logique métier dans les composants.
+- **RG-702** : chaque vue expose les états vide, chargement, erreur, permission requise et succès.
+- **RG-703** : les progressions sont visibles et annoncées par `aria-live`; clavier, focus visible et annulation sont obligatoires.
+- **RG-704** : les préférences couvrent thème, format, destination, concurrence, délais, acquisition, pré-exclusions et modules actifs.
+- **RG-705** : la galerie prend en charge la sélection, les filtres, le tri demandé, les badges de provenance et la virtualisation au-delà de 300 éléments.
+- **RG-706** : les composants restent indépendants du noyau et reçoivent données et callbacks par contrat.
 
-## J. Modularité
-- **RG-500** 🔴 Toute fonctionnalité est un module enregistré dans le registre ; le noyau ne connaît aucun module concret.
-- **RG-501** 🔴 Pas d'import direct entre modules : messages typés et services du noyau.
-- **RG-502** 🔴 Un module déclare ses permissions (`requiredPermissions`).
-- **RG-503** 🟡 Chaque module peut être activé/désactivé dans les préférences.
+## Destinations
 
-## K. Sécurité, permissions, éthique
-- **RG-600** 🔴 Permissions fixes : `activeTab`, `scripting`, `downloads`, `storage`, `offscreen`. Accès aux sites via `optional_host_permissions`, demandé **par domaine**, sur clic.
-- **RG-601** 🔴 Aucun code distant, aucun CDN, aucun `eval`.
-- **RG-602** 🔴 Aucune donnée envoyée à un tiers, aucune télémétrie.
-- **RG-603** 🔴 Affichage des données de page via `textContent` uniquement.
-- **RG-604** 🟡 `declarativeNetRequestWithHostAccess` uniquement si un site exige un `Referer` ; règle limitée au domaine concerné et documentée.
-- **RG-605** 🔴 Pas de contournement de connexion, paywall ou captcha. Usage personnel hors-ligne. Débit raisonnable (RG-206).
-
-## L. Interface
-
-Les règles RG-700 à RG-704 sont réécrites pour la refonte UI :
-
-- **RG-700** Interface française : les textes sont centralisés dans `i18n.ts`.
-- **RG-701** Les vues utilisent les composants UI partagés, sans logique métier dans les composants.
-- **RG-702** Chaque vue expose les états vide, chargement, erreur, permission requise et succès.
-- **RG-703** Les progressions sont visibles, annoncées par `aria-live`, et les jobs proposent pause, reprise et annulation lorsque possible.
-- **RG-704** Les préférences couvrent thème, format, concurrence, délais, sous-dossier, stratégie, pré-exclusions et modules actifs ; Préférences reste activé.
-- **RG-700** 🔴 Interface en français, textes centralisés (`i18n.ts`).
-- **RG-701** 🔴 Bootstrap local ; onglets = modules applicables au contexte.
-- **RG-702** 🔴 États vides explicites ; erreurs lisibles, détail technique dans `console.error`.
-- **RG-703** 🔴 Progression visible (par chapitre et globale) ; boutons pause/reprise/annulation.
-- **RG-704** 🟡 Préférences mémorisées (format, concurrence, délais, dossier, modules actifs).
-## H bis. Destinations
-
-- **RG-311** : trois modes sont proposés : navigateur, dossier personnalisé et demander à chaque fois.
-- **RG-312** : le gabarit accepte `{serie}`, `{chapitre}`, `{domaine}`, `{titre}` et `{date}` ; chaque segment respecte RG-32 ; vide signifie Téléchargements.
-- **RG-313** : le handle personnalisé reste dans IndexedDB et ne transite jamais par un message runtime ni vers un tiers.
-- **RG-314** : `queryPermission` est vérifié avant chaque tâche ; `needs-permission` exige un clic explicite.
-- **RG-315** : demander à chaque fois utilise `saveAs: true` pour une archive unique ; le format dossier est refusé avec une explication.
-- **RG-316** : les sous-dossiers sont créés selon le gabarit, les conflits utilisent `(1)`, `(2)` et une écriture interrompue ne laisse pas de fichier partiel.
-
-- **RG-303** : le chemin d'archive est produit par la destination active et son gabarit validé RG-32 ; le nom de chapitre reste nettoyé.
+- **RG-711** : trois modes sont proposés : navigateur, dossier personnalisé et demander à chaque fois.
+- **RG-712** : le gabarit accepte `{serie}`, `{chapitre}`, `{domaine}`, `{titre}` et `{date}` ; chaque segment respecte RG-32 ; vide signifie Téléchargements.
+- **RG-713** : le handle personnalisé reste dans IndexedDB de l'origine et ne transite jamais par un message runtime ni vers un tiers.
+- **RG-714** : `queryPermission` est vérifié avant chaque tâche ; `needs-permission` exige un clic explicite et persiste la reprise possible.
+- **RG-715** : demander à chaque fois utilise `saveAs: true` pour une archive unique ; le format dossier est refusé avec un message explicite.
+- **RG-716** : les sous-dossiers sont créés selon le gabarit, les conflits utilisent `(1)`, `(2)` et une écriture interrompue ne laisse pas de fichier partiel.
