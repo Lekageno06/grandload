@@ -3,8 +3,8 @@ export function getOriginPattern(url: string | URL): string {
   return `${target.protocol}//${target.hostname}/*`;
 }
 
-export async function hasHostAccess(url: string | URL): Promise<boolean> {
-  const originPattern = getOriginPattern(url);
+export async function hasHostAccess(url: string | URL, additionalOrigins: readonly string[] = []): Promise<boolean> {
+  const origins = [getOriginPattern(url), ...additionalOrigins];
 
   if (
     typeof chrome === 'undefined' ||
@@ -14,12 +14,12 @@ export async function hasHostAccess(url: string | URL): Promise<boolean> {
     return true;
   }
 
-  const granted = await chrome.permissions.contains({ origins: [originPattern] });
+  const granted = await chrome.permissions.contains({ origins });
   return granted;
 }
 
-export async function requestHostAccess(url: string | URL): Promise<boolean> {
-  const originPattern = getOriginPattern(url);
+export async function requestHostAccess(url: string | URL, additionalOrigins: readonly string[] = []): Promise<boolean> {
+  const origins = [getOriginPattern(url), ...additionalOrigins];
 
   if (
     typeof chrome === 'undefined' ||
@@ -29,6 +29,6 @@ export async function requestHostAccess(url: string | URL): Promise<boolean> {
     return true;
   }
 
-  const result = await chrome.permissions.request({ origins: [originPattern] });
+  const result = await chrome.permissions.request({ origins });
   return result;
 }

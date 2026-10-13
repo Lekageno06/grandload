@@ -1,5 +1,6 @@
 import { registerModule } from '../../core/registry';
 import { getAdapter } from '../../core/registry';
+import { requestHostAccess } from '../../core/permissions';
 import { send } from '../../core/messaging';
 import { getExclusions, getJobs, getPrefs, setExclusions, updateJobs } from '../../core/storage';
 import { createDestinationPicker } from '../../destinations/picker';
@@ -526,11 +527,9 @@ const chapterDownloadModule: GrandloadModule = {
             }),
           ),
         );
-        if (
-          typeof chrome !== 'undefined' &&
-          chrome.permissions?.request &&
-          !(await chrome.permissions.request({ origins }))
-        ) {
+        const adapter = getAdapter(ctx.adapterId);
+        const adapterOrigins = adapter?.origins?.(new URL(ctx.url)) ?? [];
+        if (!(await requestHostAccess(ctx.url, [...adapterOrigins, ...origins]))) {
           api.setStatus?.('Accès aux images refusé. Autorise le domaine puis réessaie.');
           return;
         }

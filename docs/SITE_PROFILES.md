@@ -40,3 +40,14 @@ L'adaptateur extrait d'abord les liens `.ori-chl-row a[href]`, identifie les cha
 ## Ajouter un site
 
 Voir `EXTENDING.md`. Checklist : `matches`, `classify`, `readSeries`, `readChapterPages`, `prepareChapter?`, `acquisition`, `autoExclude?`, fixture, tests.
+
+## Profils privés ajoutés
+
+| Site | Confirmé par fixture | Supposé / à revalider |
+| --- | --- | --- |
+| `hentai-origines.com` | `/manga/<slug>/`, 113 chapitres uniques dans `series.html`, lecteur `main.ori-lec-scene .reading-content img.wp-manga-chapter-img`, 42 images dans la fixture chapitre fournie, hôte identique | Le relevé navigateur mentionne 41 planches pour le chapitre 112 ; la fixture fournie correspond à un autre chapitre et en contient 42. |
+| `hentai-scantrad.org` | `/manga/<slug>/`, 110 chapitres uniques dans `serie.html`, lecteur `div.read-container .reading-content div.page-break.no-gaps img.wp-manga-chapter-img`, 7 images, URLs sur `stockage.hentai-scantrad.org` | Le comportement HTTP du CDN sous autorisation est à vérifier manuellement ; aucun contournement de Referer n'est prévu. |
+
+Ces deux profils utilisent `createWpMangaAdapter` pour la normalisation des URL, les métadonnées,
+le tri des chapitres et le défilement ; leurs sélecteurs de lecteur et de liste restent configurés
+séparément car les conteneurs observés diffèrent. Ils sont privés et absents du build public.

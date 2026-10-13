@@ -19,3 +19,7 @@ la page d'événement. Il ne demande ni `tabs`, ni `webRequest`, ni cookies, ni 
 
 Les handles de dossier sont conservés dans IndexedDB et ne transitent jamais par
 `chrome.runtime.sendMessage` ni vers un tiers.
+
+Les adaptateurs privés peuvent déclarer des origines CDN supplémentaires : elles sont jointes à
+l'origine de la page dans une seule demande d'accès déclenchée par l'utilisateur. Cela n'ajoute
+aucune permission au manifest et ne contourne pas un refus HTTP du CDN.

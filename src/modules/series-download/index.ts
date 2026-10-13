@@ -1,4 +1,6 @@
 import { send } from '../../core/messaging';
+import { getAdapter } from '../../core/registry';
+import { requestHostAccess } from '../../core/permissions';
 import { getJobs, getPrefs, readStorage } from '../../core/storage';
 import { createDestinationPicker } from '../../destinations/picker';
 import { registerModule } from '../../core/registry';
@@ -478,12 +480,9 @@ const seriesDownloadModule: GrandloadModule = {
           return;
         }
 
-        const origin = new URL(context.url).origin;
-        if (
-          typeof chrome !== 'undefined' &&
-          chrome.permissions?.request &&
-          !(await chrome.permissions.request({ origins: [`${origin}/*`] }))
-        ) {
+        const adapter = getAdapter(context.adapterId);
+        const adapterOrigins = adapter?.origins?.(new URL(context.url)) ?? [];
+        if (!(await requestHostAccess(context.url, adapterOrigins))) {
           api.setStatus?.('Accès au site refusé. Autorise le domaine puis réessaie.');
           return;
         }

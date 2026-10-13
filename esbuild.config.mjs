@@ -6,7 +6,10 @@ const outDir = 'dist';
 const publicDir = 'public';
 const watchMode = process.argv.includes('--watch');
 const buildTimestamp = new Date().toISOString();
-const buildDefines = { __BUILD_DATE__: JSON.stringify(buildTimestamp) };
+const buildDefines = {
+  __BUILD_DATE__: JSON.stringify(buildTimestamp),
+  __GRANDLOAD_PRIVATE__: JSON.stringify(process.env.GRANDLOAD_PRIVATE === '1'),
+};
 const releaseVersion = process.env.GRANDLOAD_VERSION ?? '0.2.0';
 
 const commonEntries = {

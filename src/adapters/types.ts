@@ -10,6 +10,7 @@ export interface SiteAdapter {
   countChapterPageElements?: (doc: Document) => number;
   prepareChapter?: (doc: Document) => Promise<void>;
   acquisition: 'live-dom' | 'html-parse';
+  origins?: (url: URL) => string[];
   autoExclude?: (page: PageRef) => string | null;
   /** Motifs d'URL à pré-exclure automatiquement (logo, bannière, avatar…). */
   excludePatterns?: readonly RegExp[];

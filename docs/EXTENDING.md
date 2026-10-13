@@ -8,6 +8,18 @@ Principe : **ajouter une capacité = ajouter un fichier + une ligne d'enregistre
 3. Écrire `tests/adapters/<site>.test.ts` avec un **HTML de référence** (fixture) sauvegardé dans `tests/fixtures/<site>/`.
 4. Aucun changement dans les modules : ils appellent l'adaptateur via le registre.
 
+### Adaptateurs privés
+
+Les adaptateurs réservés à un usage privé vivent dans `src/adapters/private/`. Ils sont chargés
+uniquement lorsque `GRANDLOAD_PRIVATE=1` est défini au build. Le build public (`npm run build` sans
+cette variable, ainsi que `npm run zip`) ne les importe pas et ne doit contenir ni leur code ni leur
+nom. Les fixtures privées restent dans les tests et ne sont jamais incluses dans le paquet.
+
+Un adaptateur peut déclarer `origins(url)` pour retourner les origines CDN nécessaires. Le module
+demande alors en une seule action utilisateur l'accès à l'origine de la page et à ces origines.
+Une réponse 403 du CDN doit être signalée à l'utilisateur ; aucune règle de contournement ne doit
+être ajoutée.
+
 ## Ajouter un format d'archive (packager)
 1. Créer `src/packagers/<format>.ts` implémentant `Packager` (`id`, `extension`, `pack`).
 2. L'enregistrer dans `src/packagers/index.ts`.
