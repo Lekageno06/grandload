@@ -197,5 +197,7 @@ export function readPageAssets(doc: Document, pageUrl: string): ScanItem[] {
     }
   }
 
-  return Array.from(items.values()).sort((left, right) => left.label.localeCompare(right.label));
+  // L’ordre d’insertion correspond à l’ordre de lecture de la page.
+  // Le tri est une responsabilité de la galerie, pas de la collecte DOM.
+  return Array.from(items.values());
 }

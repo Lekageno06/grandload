@@ -85,14 +85,20 @@ export class ImageGallery {
   private readonly pendingImages: HTMLImageElement[] = [];
   private activeLoads = 0;
   private readonly onSelectionChange: ((items: GalleryItem[]) => void) | undefined;
+  private readonly onOpen: ((item: GalleryItem) => void) | undefined;
   private readonly ordered: boolean;
 
   constructor(
     items: readonly GalleryItem[],
-    options: { onSelectionChange?: (items: GalleryItem[]) => void; ordered?: boolean } = {},
+    options: {
+      onSelectionChange?: (items: GalleryItem[]) => void;
+      onOpen?: (item: GalleryItem) => void;
+      ordered?: boolean;
+    } = {},
   ) {
     this.items = [...items];
     this.onSelectionChange = options.onSelectionChange;
+    this.onOpen = options.onOpen;
     this.ordered = options.ordered ?? false;
     this.element = h('section', {
       className: 'ui-image-gallery',
@@ -170,6 +176,15 @@ export class ImageGallery {
       alt: item.label,
       loading: 'lazy',
       'data-src': item.url,
+    });
+    image.tabIndex = 0;
+    image.setAttribute('role', 'button');
+    image.addEventListener('click', () => this.onOpen?.(item));
+    image.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        this.onOpen?.(item);
+      }
     });
     image.addEventListener('error', () => {
       image.dataset.preview = 'failed';

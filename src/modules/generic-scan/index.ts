@@ -1,7 +1,7 @@
 import { send } from '../../core/messaging';
 import { registerModule } from '../../core/registry';
 import type { GrandloadModule, ModuleApi, PageContext } from '../../core/types';
-import { ImageGallery, ImageToolbar } from '../../ui/components/gallery';
+import { ImageGallery, ImageToolbar, lightbox } from '../../ui/components/gallery';
 import type { GalleryItem } from '../../ui/components/gallery';
 import { exportCsv, exportJson, exportTxt } from './exports';
 import { filterScanItems, getTypeCounts } from './filters';
@@ -336,6 +336,14 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
           ...selected.map((item) => item.id),
         ]);
         updateButtons();
+      },
+      onOpen: (item) => {
+        const dialog = lightbox(item, () => {
+          dialog.close();
+          dialog.remove();
+        }) as HTMLDialogElement;
+        document.body.appendChild(dialog);
+        if (typeof dialog.showModal === 'function') dialog.showModal();
       },
     });
     imageSection.append(toolbar.element, gallery.element);
