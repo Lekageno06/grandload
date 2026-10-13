@@ -4,7 +4,17 @@ import {
   getBaseNameFromUrl,
   normalizeUrl,
 } from '../../../shared/url-utils';
-import type { ScanItem, ScanSource } from '../types';
+import type { AssetProvenance, ScanItem, ScanSource } from '../types';
+
+export function getImageProvenance(image: Element): AssetProvenance {
+  if (image.closest('header')) return 'header';
+  if (image.closest('footer')) return 'footer';
+  if (image.closest('nav, [role="navigation"], .main-navigation_wrap, .wrap_branding')) {
+    return 'navigation';
+  }
+  if (image.closest('main, [role="main"]')) return 'main';
+  return 'content';
+}
 
 function addCandidate(
   items: Map<string, ScanItem>,
@@ -12,6 +22,7 @@ function addCandidate(
   source: ScanSource,
   pageUrl: string,
   overrideLabel?: string,
+  provenance?: AssetProvenance,
 ): void {
   const normalized = normalizeUrl(rawUrl, pageUrl);
 
@@ -29,6 +40,7 @@ function addCandidate(
     ext: ext.includes('.') ? (ext.split('.').pop() ?? '') : '',
     label,
     source,
+    ...(provenance ? { provenance } : {}),
   });
 }
 
@@ -78,6 +90,7 @@ export function readPageAssets(doc: Document, pageUrl: string): ScanItem[] {
           'img',
           pageUrl,
           img.getAttribute('alt') || getBaseNameFromUrl(candidate),
+          getImageProvenance(img),
         );
       }
     }

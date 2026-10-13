@@ -22,233 +22,34 @@ type ModuleState = {
   filters: ScanFilterState;
 };
 
-function scanCurrentPageInTab(tabId: number): Promise<ScanItem[]> {
-  if (
-    typeof chrome === 'undefined' ||
-    !chrome.scripting ||
-    typeof chrome.scripting.executeScript !== 'function'
-  ) {
-    return Promise.resolve([]);
-  }
-
-  return new Promise<ScanItem[]>((resolve) => {
-    chrome.scripting.executeScript(
-      {
-        target: { tabId },
-        func: () => {
-          const items: ScanItem[] = [];
-          const seen = new Set<string>();
-
-          const normalizeUrl = (rawUrl: string, baseUrl: string): string | null => {
-            const trimmed = rawUrl.trim();
-            if (!trimmed) {
-              return null;
-            }
-
-            try {
-              const resolved = new URL(trimmed, baseUrl);
-              if (!['http:', 'https:'].includes(resolved.protocol.toLowerCase())) {
-                return null;
-              }
-              return resolved.toString();
-            } catch {
-              return null;
-            }
-          };
-
-          const getExt = (url: string): string => {
-            try {
-              const pathname = new URL(url).pathname;
-              const match = pathname.match(/\.([A-Za-z0-9]+)(?:$|[?#])/u);
-              return match?.[1]?.toLowerCase() ?? '';
-            } catch {
-              return '';
-            }
-          };
-
-          const bestSrcset = (srcset: string): string | null => {
-            const candidates = srcset.split(',');
-            let best: { url: string; score: number } | null = null;
-
-            for (const part of candidates) {
-              const trimmed = part.trim();
-              if (!trimmed) {
-                continue;
-              }
-
-              const tokens = trimmed.split(/\s+/u);
-              const url = tokens[0];
-              if (!url) {
-                continue;
-              }
-
-              const descriptor = tokens[1]?.toLowerCase() ?? '';
-              const match = descriptor.match(/^(\d+(?:\.\d+)?)x$/u);
-              const score = match ? Number(match[1]) : 0;
-
-              if (score > (best?.score ?? Number.NEGATIVE_INFINITY)) {
-                best = { url, score };
-              }
-            }
-
-            return best?.url ?? null;
-          };
-
-          const addCandidate = (
-            rawUrl: string,
-            source: ScanItem['source'],
-            label: string,
-          ): void => {
-            const normalized = normalizeUrl(rawUrl, location.href);
-            if (!normalized) {
-              return;
-            }
-
-            if (seen.has(normalized)) {
-              return;
-            }
-
-            seen.add(normalized);
-            const extension = getExt(normalized);
-            const lowerSource = source.toLowerCase();
-            let type: ScanItem['type'] = 'other';
-            if (
-              ['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'svg', 'bmp', 'ico'].includes(extension)
-            ) {
-              type = 'image';
-            } else if (['mp4', 'webm', 'mkv', 'mov', 'avi', 'm3u8', 'mpd'].includes(extension)) {
-              type = 'video';
-            } else if (['mp3', 'wav', 'ogg', 'm4a', 'flac', 'aac'].includes(extension)) {
-              type = 'audio';
-            } else if (
-              ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv'].includes(extension)
-            ) {
-              type = 'document';
-            } else if (['zip', 'rar', '7z', 'tar', 'gz'].includes(extension)) {
-              type = 'archive';
-            } else if (lowerSource === 'a' || lowerSource === 'link' || lowerSource === 'iframe') {
-              type = 'link';
-            } else if (
-              lowerSource === 'img' ||
-              lowerSource === 'picture' ||
-              lowerSource === 'meta'
-            ) {
-              type = 'image';
-            } else if (lowerSource === 'video' || lowerSource === 'source') {
-              type = 'video';
-            }
-
-            items.push({
-              id: normalized,
-              url: normalized,
-              type,
-              ext: extension,
-              label: label || normalized.split('/').pop() || 'resource',
-              source,
-            });
-          };
-
-          const anchors = Array.from(document.querySelectorAll('a[href]'));
-          for (const anchor of anchors) {
-            const href = anchor.getAttribute('href');
-            if (href) {
-              addCandidate(href, 'a', anchor.textContent?.trim() || href);
-            }
-          }
-
-          for (const image of Array.from(
-            document.querySelectorAll(
-              'img[src], img[data-src], img[data-original], img[data-lazy-src]',
-            ),
-          )) {
-            const candidates = [
-              image.getAttribute('src'),
-              image.getAttribute('data-src'),
-              image.getAttribute('data-original'),
-              image.getAttribute('data-lazy-src'),
-              image.getAttribute('srcset') ? bestSrcset(image.getAttribute('srcset') ?? '') : null,
-            ];
-
-            for (const candidate of candidates) {
-              if (candidate) {
-                addCandidate(candidate, 'img', image.getAttribute('alt') || candidate);
-              }
-            }
-          }
-
-          for (const source of Array.from(
-            document.querySelectorAll('source[src], source[data-src], picture source[srcset]'),
-          )) {
-            const rawValue = source.getAttribute('srcset') ?? source.getAttribute('src') ?? '';
-            const candidate = rawValue.includes(',') ? bestSrcset(rawValue) : rawValue;
-            if (candidate) {
-              addCandidate(candidate, 'source', candidate);
-            }
-          }
-
-          for (const media of Array.from(
-            document.querySelectorAll(
-              'video[src], audio[src], video source[src], audio source[src]',
-            ),
-          )) {
-            const src = media.getAttribute('src') ?? media.getAttribute('data-src') ?? '';
-            if (src) {
-              const tagName = media.tagName.toLowerCase();
-              const source: ScanItem['source'] =
-                tagName === 'video' ? 'video' : tagName === 'audio' ? 'audio' : 'source';
-              addCandidate(src, source, src);
-            }
-          }
-
-          for (const link of Array.from(document.querySelectorAll('link[href]'))) {
-            const href = link.getAttribute('href');
-            if (href) {
-              addCandidate(href, 'link', href);
-            }
-          }
-
-          for (const meta of Array.from(
-            document.querySelectorAll(
-              'meta[property="og:image"], meta[property="og:video"], meta[name="twitter:image"]',
-            ),
-          )) {
-            const content = meta.getAttribute('content');
-            if (content) {
-              addCandidate(content, 'meta', content);
-            }
-          }
-
-          for (const iframe of Array.from(document.querySelectorAll('iframe[src]'))) {
-            const src = iframe.getAttribute('src');
-            if (src) {
-              addCandidate(src, 'iframe', src);
-            }
-          }
-
-          for (const node of Array.from(document.querySelectorAll('[style]'))) {
-            const styleText = node.getAttribute('style') ?? '';
-            const regex = /url\((['"]?)(.*?)\1\)/giu;
-            const matches = styleText.matchAll(regex);
-
-            for (const match of matches) {
-              const value = match[2];
-              if (value) {
-                addCandidate(value, 'style', value);
-              }
-            }
-          }
-
-          return items;
-        },
-      },
-      (injectionResults) => {
-        const result = injectionResults?.[0]?.result as ScanItem[] | undefined;
-        resolve(result ?? []);
-      },
-    );
+function injectContentReader(tabId: number): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] }, () => {
+      const error = chrome.runtime.lastError;
+      if (error) {
+        reject(new Error(error.message ?? 'Impossible de lire cette page.'));
+        return;
+      }
+      resolve();
+    });
   });
 }
 
+function scanCurrentPageInTab(tabId: number, pageUrl: string): Promise<ScanItem[]> {
+  return injectContentReader(tabId).then(
+    () =>
+      new Promise<ScanItem[]>((resolve) => {
+        chrome.tabs.sendMessage(
+          tabId,
+          { type: 'READ_PAGE_ASSETS', payload: { pageUrl } },
+          (response: { ok?: boolean; data?: ScanItem[] } | undefined) => {
+            const runtimeError = chrome.runtime.lastError;
+            resolve(runtimeError || !response?.ok || !response.data ? [] : response.data);
+          },
+        );
+      }),
+  );
+}
 function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): void {
   const state: ModuleState = {
     items: [],
@@ -419,6 +220,12 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
       meta.textContent = `${item.type} · ${item.ext || 'no ext'} · ${item.source}`;
       labelBox.appendChild(title);
       labelBox.appendChild(meta);
+      if (item.type === 'image' && item.provenance) {
+        const provenance = document.createElement('span');
+        provenance.className = 'badge text-bg-secondary align-self-start';
+        provenance.textContent = `Provenance : ${item.provenance}`;
+        labelBox.appendChild(provenance);
+      }
 
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
@@ -571,7 +378,7 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
       return;
     }
 
-    const results = await scanCurrentPageInTab(ctx.tabId);
+    const results = await scanCurrentPageInTab(ctx.tabId, ctx.url);
     state.items = results;
     renderBadges();
     renderList();

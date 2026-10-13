@@ -13,6 +13,7 @@ export type MessageKind =
   | 'PAGE_CONTEXT'
   | 'READ_CHAPTER_PAGES'
   | 'READ_CHAPTER_META'
+  | 'READ_PAGE_ASSETS'
   | 'READ_SERIES'
   | 'JOB_CREATE'
   | 'JOB_CONTROL'
@@ -26,6 +27,7 @@ export interface MessagePayloadMap {
   PAGE_CONTEXT: { tabId: number };
   READ_CHAPTER_PAGES: { adapterId: string };
   READ_CHAPTER_META: { adapterId: string };
+  READ_PAGE_ASSETS: { pageUrl: string };
   READ_SERIES: { adapterId: string };
   JOB_CREATE: { kind: 'chapter' | 'series' | 'links'; params: Record<string, unknown> };
   JOB_CONTROL: { jobId: string; action: 'pause' | 'resume' | 'cancel' | 'retry' };
@@ -52,6 +54,7 @@ export interface MessageResultMap {
   PAGE_CONTEXT: PageContext;
   READ_CHAPTER_PAGES: PageRef[];
   READ_CHAPTER_META: import('./types').ChapterMeta;
+  READ_PAGE_ASSETS: import('../modules/generic-scan/types').ScanItem[];
   READ_SERIES: SeriesInfo;
   JOB_CREATE: { jobId: string };
   JOB_CONTROL: { ok: boolean };
@@ -177,6 +180,7 @@ export function onMessage<T extends MessageKind>(
 export const messageTypes: readonly MessageKind[] = [
   'PAGE_CONTEXT',
   'READ_CHAPTER_PAGES',
+  'READ_PAGE_ASSETS',
   'READ_SERIES',
   'JOB_CREATE',
   'JOB_CONTROL',

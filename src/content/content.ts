@@ -2,6 +2,7 @@ import '../adapters';
 import { getAdapter } from '../core/registry';
 import { toGrandloadError } from '../core/errors';
 import type { MessageKind, MessagePayloadMap, MessageResultMap } from '../core/messaging';
+import { readPageAssets } from '../modules/generic-scan/content/dom-reader';
 
 type ContentRequest = { type: MessageKind; payload: Record<string, unknown> };
 
@@ -18,11 +19,21 @@ function isContentRequest(value: unknown): value is ContentRequest {
 }
 
 async function handleContentRequest<
-  T extends 'READ_SERIES' | 'READ_CHAPTER_PAGES' | 'READ_CHAPTER_META',
+  T extends 'READ_SERIES' | 'READ_CHAPTER_PAGES' | 'READ_CHAPTER_META' | 'READ_PAGE_ASSETS',
 >(type: T, payload: MessagePayloadMap[T]): Promise<MessageResultMap[T]> {
-  const adapter = getAdapter(payload.adapterId);
+  if (type === 'READ_PAGE_ASSETS') {
+    return readPageAssets(
+      document,
+      (payload as MessagePayloadMap['READ_PAGE_ASSETS']).pageUrl,
+    ) as MessageResultMap[T];
+  }
+
+  const adapter = getAdapter(
+    (payload as MessagePayloadMap['READ_CHAPTER_PAGES'] | MessagePayloadMap['READ_SERIES'])
+      .adapterId,
+  );
   if (!adapter) {
-    throw new Error(`Adaptateur inconnu : ${payload.adapterId}`);
+    throw new Error('Adaptateur inconnu.');
   }
 
   if (type === 'READ_SERIES') {
@@ -53,7 +64,8 @@ if (!contentGlobal.__grandloadContentReader) {
     if (
       message.type !== 'READ_SERIES' &&
       message.type !== 'READ_CHAPTER_PAGES' &&
-      message.type !== 'READ_CHAPTER_META'
+      message.type !== 'READ_CHAPTER_META' &&
+      message.type !== 'READ_PAGE_ASSETS'
     ) {
       return false;
     }

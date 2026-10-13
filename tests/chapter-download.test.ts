@@ -31,7 +31,7 @@ describe('mangas-origines adapter', () => {
     );
 
     expect(source).toContain("sendContentRequest<PageRef[]>(tabId, 'READ_CHAPTER_PAGES'");
-    expect(source).not.toContain('executeScript');
+    expect(source).not.toContain('func:');
     expect(source).not.toMatch(/querySelectorAll[^\n]*['"]img/iu);
   });
   it('classifies series and chapter URLs including a decimal route', () => {

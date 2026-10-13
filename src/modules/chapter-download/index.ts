@@ -77,6 +77,19 @@ function sendContentRequest<T>(
   });
 }
 
+function injectContentReader(tabId: number): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] }, () => {
+      const error = chrome.runtime.lastError;
+      if (error) {
+        reject(new Error(error.message ?? 'Impossible de lire cette page.'));
+        return;
+      }
+      resolve();
+    });
+  });
+}
+
 function collectChapterImages(tabId: number, adapterId: string): Promise<ChapterDomData> {
   if (
     typeof chrome === 'undefined' ||
@@ -86,10 +99,13 @@ function collectChapterImages(tabId: number, adapterId: string): Promise<Chapter
     return Promise.resolve({ pages: [], seriesTitle: 'Série', chapterLabel: '' });
   }
 
-  return Promise.all([
-    sendContentRequest<PageRef[]>(tabId, 'READ_CHAPTER_PAGES', adapterId),
-    sendContentRequest<ChapterMeta>(tabId, 'READ_CHAPTER_META', adapterId),
-  ])
+  return injectContentReader(tabId)
+    .then(() =>
+      Promise.all([
+        sendContentRequest<PageRef[]>(tabId, 'READ_CHAPTER_PAGES', adapterId),
+        sendContentRequest<ChapterMeta>(tabId, 'READ_CHAPTER_META', adapterId),
+      ]),
+    )
     .then(([pages, meta]) => ({
       pages: pages.map((page) => ({
         ...page,

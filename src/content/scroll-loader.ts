@@ -17,12 +17,7 @@ function wait(ms: number): Promise<void> {
 export async function autoScrollUntilStable(options: ScrollLoaderOptions): Promise<number> {
   const documentRef = options.document;
   const windowRef = options.windowRef ?? documentRef.defaultView ?? undefined;
-  const pageCountProvider =
-    options.pageCountProvider ??
-    (() => {
-      const pageImages = documentRef.querySelectorAll('img');
-      return pageImages.length;
-    });
+  const pageCountProvider = options.pageCountProvider ?? (() => 0);
 
   const scrollStep = options.scrollStep ?? 600;
   const maxScrolls = options.maxScrolls ?? 8;

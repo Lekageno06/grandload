@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { classifyResource } from '../src/modules/generic-scan/classify';
 import { exportCsv } from '../src/modules/generic-scan/exports';
 import { filterScanItems } from '../src/modules/generic-scan/filters';
+import { readPageAssets } from '../src/modules/generic-scan/content/dom-reader';
 import type { ScanItem } from '../src/modules/generic-scan/types';
+import { JSDOM } from 'jsdom';
 import { dedupeUrls, getBestSrcsetCandidate, normalizeUrl } from '../src/shared/url-utils';
 
 describe('url-utils', () => {
@@ -22,7 +24,8 @@ describe('url-utils', () => {
   });
 
   it('rejects unsafe download folder paths and accepts sanitized relative names', async () => {
-    const { sanitizeDownloadFolder, validateDownloadFolder } = await import('../src/shared/url-utils');
+    const { sanitizeDownloadFolder, validateDownloadFolder } =
+      await import('../src/shared/url-utils');
 
     expect(validateDownloadFolder('Mangas 2026').valid).toBe(true);
     expect(sanitizeDownloadFolder('Mangas 2026')).toBe('Mangas 2026');
@@ -41,6 +44,25 @@ describe('classification', () => {
     expect(classifyResource('https://example.com/chapitre-129-5.pdf', 'a')).toBe('document');
     expect(classifyResource('https://example.com/stream.m3u8', 'video')).toBe('video');
     expect(classifyResource('https://example.com/page', 'a')).toBe('link');
+  });
+});
+
+describe('lecture DOM unique et provenance des images', () => {
+  it('conserve logo, icône et miniature avec leur provenance', () => {
+    const document = new JSDOM(
+      `
+      <header><img src="/logo.png" alt="Logo"></header>
+      <nav><img src="/icon.png" alt="Icône"></nav>
+      <main><img src="/cover.jpg" alt="Couverture"></main>
+    `,
+      { url: 'https://example.test/page' },
+    ).window.document;
+    const images = readPageAssets(document, document.location.href).filter(
+      (item) => item.type === 'image',
+    );
+
+    expect(images).toHaveLength(3);
+    expect(images.map((item) => item.provenance).sort()).toEqual(['header', 'main', 'navigation']);
   });
 });
 
