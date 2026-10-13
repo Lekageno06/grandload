@@ -40,6 +40,7 @@ export function createDestinationPicker(initial: DestinationSettings): {
   choose.textContent = 'Choisir un dossier…';
   const status = document.createElement('small');
   status.className = 'text-body-secondary';
+  let userInteracted = false;
   const option = mode.querySelector<HTMLOptionElement>('[value="custom-folder"]');
   if (!isCustomFolderAvailable() && option) {
     option.disabled = true;
@@ -52,7 +53,11 @@ export function createDestinationPicker(initial: DestinationSettings): {
       if (handle) status.textContent = `Dossier : ${handle.name}`;
     });
   }
+  mode.addEventListener('change', () => {
+    userInteracted = true;
+  });
   choose.addEventListener('click', () => {
+    userInteracted = true;
     choose.disabled = true;
     void chooseAndStoreCustomFolder()
       .then((handle) => {
@@ -79,6 +84,9 @@ export function createDestinationPicker(initial: DestinationSettings): {
         : initial.customFolderName,
     }),
     setSettings: (settings) => {
+      // L'initialisation asynchrone des préférences ne doit pas annuler
+      // un choix déjà effectué dans la feuille par l'utilisateur.
+      if (userInteracted) return;
       mode.value = settings.mode === 'custom-folder' && option?.disabled ? 'browser' : settings.mode;
       template.value = settings.subfolderTemplate;
     },

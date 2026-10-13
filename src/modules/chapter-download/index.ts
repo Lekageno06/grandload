@@ -225,7 +225,7 @@ const chapterDownloadModule: GrandloadModule = {
     const archiveNameInput = document.createElement('input');
     archiveNameInput.type = 'text';
     archiveNameInput.className = 'form-control form-control-sm';
-    archiveNameInput.value = 'chapitre';
+    archiveNameInput.placeholder = 'Automatique : œuvre - chapitre';
     archiveNameInput.maxLength = 150;
     archiveNameLabel.appendChild(archiveNameInput);
     panel.appendChild(archiveNameLabel);
@@ -559,7 +559,7 @@ const chapterDownloadModule: GrandloadModule = {
               downloadFolder: prefs.downloadFolder,
               destinationMode: destination.mode,
               destinationTemplate: destination.subfolderTemplate,
-              archiveName: archiveNameInput.value,
+              ...(archiveNameInput.value.trim() ? { archiveName: archiveNameInput.value.trim() } : {}),
             },
           },
         });

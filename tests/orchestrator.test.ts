@@ -117,6 +117,23 @@ describe('chapter job orchestration', () => {
     ).toBe('Grandload/Liens et médias/._ma_page.zip');
   });
 
+  it('uses the work title and chapter number when no custom archive name is given', () => {
+    expect(
+      buildChapterDownloadFilename(
+        {
+          series: 'The Boxer',
+          chapter: { number: 119, label: 'Chapitre 119', url: 'https://example.test' },
+          pageCount: 16,
+          sourceUrl: 'https://example.test',
+        },
+        '.zip',
+        'Mangas',
+        undefined,
+        'Mangas',
+      ),
+    ).toBe('Mangas/The Boxer/The Boxer - Chapitre 119.zip');
+  });
+
   it('does not report a warning when Chrome returns the requested relative path', () => {
     expect(
       detectDownloadFilenameWarning('Grandload/Series/chapter.cbz', {
