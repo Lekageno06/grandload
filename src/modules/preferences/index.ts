@@ -154,10 +154,15 @@ const preferencesModule: GrandloadModule = {
           customFolderStatus.textContent = `Dossier sélectionné : ${handle.name}`;
           destinationMode.value = 'custom-folder';
         })
-        .catch((error: unknown) => {
-          customFolderStatus.textContent = isDirectoryPickerCancellation(error)
-            ? 'Sélection annulée.'
-            : error instanceof Error ? error.message : 'Sélection impossible.';
+        .catch(async (error: unknown) => {
+          if (isDirectoryPickerCancellation(error)) {
+            const previousHandle = await getCustomFolderHandle();
+            customFolderStatus.textContent = previousHandle
+              ? `Dossier sélectionné : ${previousHandle.name} (sélection conservée)`
+              : 'Sélection annulée. Aucun dossier personnalisé n’est enregistré.';
+            return;
+          }
+          customFolderStatus.textContent = error instanceof Error ? error.message : 'Sélection impossible.';
         })
         .finally(() => {
           chooseFolderButton.disabled = !customFolderAvailable;

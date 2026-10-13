@@ -64,10 +64,15 @@ export function createDestinationPicker(initial: DestinationSettings): {
         mode.value = 'custom-folder';
         status.textContent = `Dossier : ${handle.name}`;
       })
-      .catch((error: unknown) => {
-        status.textContent = isDirectoryPickerCancellation(error)
-          ? 'Sélection annulée.'
-          : error instanceof Error ? error.message : 'Sélection impossible.';
+      .catch(async (error: unknown) => {
+        if (isDirectoryPickerCancellation(error)) {
+          const previousHandle = await getCustomFolderHandle();
+          status.textContent = previousHandle
+            ? `Dossier : ${previousHandle.name} (sélection conservée)`
+            : 'Sélection annulée. Aucun dossier personnalisé n’est enregistré.';
+          return;
+        }
+        status.textContent = error instanceof Error ? error.message : 'Sélection impossible.';
       })
       .finally(() => {
         choose.disabled = !isCustomFolderAvailable();
