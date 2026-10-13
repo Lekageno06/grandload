@@ -7,10 +7,7 @@ import {
   evaluateMemorizedExclusion,
   processPageExclusions,
 } from '../src/modules/chapter-download/exclusions';
-import {
-  getChapterSelectionCounts,
-  getExclusionBadgeText,
-} from '../src/modules/chapter-download';
+import { getChapterSelectionCounts, getExclusionBadgeText } from '../src/modules/chapter-download';
 
 describe('Exclusions (RG-106 & RG-107)', () => {
   describe('Pré-exclusions automatiques (RG-106)', () => {
@@ -58,7 +55,7 @@ describe('Exclusions (RG-106 & RG-107)', () => {
       expect(result.reason).toContain('Doublon');
     });
 
-    it('pré-exclut une bannière ou un motif d\'URL fourni par l\'adaptateur (logo, banner, discord)', () => {
+    it("pré-exclut une bannière ou un motif d'URL fourni par l'adaptateur (logo, banner, discord)", () => {
       const bannerPage: PageRef = {
         index: 5,
         url: 'https://mangas-origines.fr/uploads/banner_fin.webp',
@@ -90,7 +87,7 @@ describe('Exclusions (RG-106 & RG-107)', () => {
       expect(result.reason).toContain('dernière planche');
     });
 
-    it('n\'exclut pas les autres planches avec lastPage mémorisé', () => {
+    it("n'exclut pas les autres planches avec lastPage mémorisé", () => {
       const memory: ExclusionMemory = {
         lastPage: true,
         urlPatterns: [],
@@ -105,7 +102,7 @@ describe('Exclusions (RG-106 & RG-107)', () => {
       expect(result.excluded).toBe(false);
     });
 
-    it('suggère un motif d\'URL mémorisé sans appliquer l\'exclusion', () => {
+    it("suggère un motif d'URL mémorisé sans appliquer l'exclusion", () => {
       const memory: ExclusionMemory = {
         lastPage: false,
         urlPatterns: ['discord_join'],
@@ -144,6 +141,22 @@ describe('Exclusions (RG-106 & RG-107)', () => {
       expect(disabled[2]?.excluded).toBe(false);
     });
 
+    it('conserve un badge et une raison lisibles pour une planche pré-exclue', () => {
+      const [excluded] = processPageExclusions(
+        [{ index: 1, url: 'https://mangas-origines.fr/logo.webp', ext: 'webp', width: 800 }],
+        mangasOriginesAdapter,
+        true,
+      );
+
+      expect(excluded?.excluded).toBe(true);
+      expect(
+        getExclusionBadgeText({
+          selected: false,
+          excludeReason: excluded?.reason,
+        }),
+      ).toContain('bannière/promo');
+    });
+
     it('retourne la dernière planche mémorisée comme suggestion incluse', () => {
       const pages: PageRef[] = [
         { index: 1, url: 'https://mangas-origines.fr/p1.webp', ext: 'webp' },
@@ -161,12 +174,10 @@ describe('Exclusions (RG-106 & RG-107)', () => {
 
   it('keeps memorized exclusions included as visible suggestions and counts them as included', () => {
     const page = { index: 10, url: 'https://example.test/page_010.jpg', ext: 'jpg' };
-    const [suggestion] = processPageExclusions(
-      [page],
-      undefined,
-      false,
-      { lastPage: true, urlPatterns: [] },
-    );
+    const [suggestion] = processPageExclusions([page], undefined, false, {
+      lastPage: true,
+      urlPatterns: [],
+    });
     expect(suggestion?.excluded).toBe(false);
     expect(suggestion?.isSuggestedExclusion).toBe(true);
 

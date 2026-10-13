@@ -1,5 +1,17 @@
 import { getFileExtension, normalizeUrl } from '../shared/url-utils';
+import { GrandloadError } from '../core/errors';
 import type { SiteAdapter } from './types';
+
+const READER_SELECTOR = 'main.ori-lec-scene .reading-content img.wp-manga-chapter-img';
+const SCENE_SELECTOR = 'main.ori-lec-scene img.wp-manga-chapter-img';
+const CLASS_FALLBACK_SELECTOR = 'img.wp-manga-chapter-img';
+const EXCLUDED_ANCESTORS = 'header, footer, nav, .main-navigation_wrap, .wrap_branding';
+
+interface ReaderSelection {
+  images: HTMLImageElement[];
+  selector: string;
+  fallbackReason?: string;
+}
 
 function getChapterNumberFromUrl(url: string): number | null {
   let pathname: string;
@@ -30,7 +42,13 @@ function normalizeChapterLabel(value: string): string {
 }
 
 function cleanWorkTitle(value: string): string {
-  return value.replace(/\s+/gu, ' ').trim().replace(/^Lire\s+/iu, '').replace(/\s+(?:Scan\s+FR|Scan)\s*$/iu, '').replace(/\s*-\s*Mangas?\s+Origines\s*$/iu, '').trim();
+  return value
+    .replace(/\s+/gu, ' ')
+    .trim()
+    .replace(/^Lire\s+/iu, '')
+    .replace(/\s+(?:Scan\s+FR|Scan)\s*$/iu, '')
+    .replace(/\s*-\s*Mangas?\s+Origines\s*$/iu, '')
+    .trim();
 }
 
 function readWorkTitle(doc: Document): string {
@@ -39,7 +57,9 @@ function readWorkTitle(doc: Document): string {
     doc.querySelector('[itemprop="name"]')?.textContent,
     doc.querySelector('meta[property="og:title"]')?.getAttribute('content'),
   ];
-  const title = candidates.map((value) => (value ? cleanWorkTitle(value) : '')).find((value) => value && !/chapitre\s+\d/iu.test(value));
+  const title = candidates
+    .map((value) => (value ? cleanWorkTitle(value) : ''))
+    .find((value) => value && !/chapitre\s+\d/iu.test(value));
   return title || cleanWorkTitle(doc.title) || 'Série';
 }
 
@@ -73,15 +93,45 @@ function collectChapters(
   return chapters;
 }
 
+function selectReaderImages(doc: Document): ReaderSelection {
+  const readerImages = Array.from(doc.querySelectorAll<HTMLImageElement>(READER_SELECTOR));
+  if (readerImages.length > 0) {
+    return { images: readerImages, selector: READER_SELECTOR };
+  }
+
+  const sceneImages = Array.from(doc.querySelectorAll<HTMLImageElement>(SCENE_SELECTOR));
+  if (sceneImages.length > 0) {
+    return {
+      images: sceneImages,
+      selector: SCENE_SELECTOR,
+      fallbackReason: `aucune image avec le sélecteur ${READER_SELECTOR}`,
+    };
+  }
+
+  const fallbackImages = Array.from(
+    doc.querySelectorAll<HTMLImageElement>(CLASS_FALLBACK_SELECTOR),
+  ).filter((image) => !image.closest(EXCLUDED_ANCESTORS));
+  return {
+    images: fallbackImages,
+    selector: CLASS_FALLBACK_SELECTOR,
+    ...(fallbackImages.length > 0
+      ? { fallbackReason: `aucune image dans ${SCENE_SELECTOR}` }
+      : {
+          fallbackReason: `aucune image dans ${SCENE_SELECTOR} ni avec ${CLASS_FALLBACK_SELECTOR}`,
+        }),
+  };
+}
+
 function getReaderImages(doc: Document): HTMLImageElement[] {
-  const preciseMatches = Array.from(
-    doc.querySelectorAll<HTMLImageElement>(
-      '.ori-lec-scene .reading-content .page-break img.wp-manga-chapter-img',
-    ),
+  return selectReaderImages(doc).images;
+}
+
+function logReaderSelection(selection: ReaderSelection): void {
+  console.info(
+    `[Grandload] Lecture chapitre: adaptateur=mangas-origines; ` +
+      `sélecteur="${selection.selector}"; résultats=${selection.images.length}; ` +
+      `repli=${selection.fallbackReason ? `oui (${selection.fallbackReason})` : 'non'}`,
   );
-  return preciseMatches.length > 0
-    ? preciseMatches
-    : Array.from(doc.querySelectorAll<HTMLImageElement>('img.wp-manga-chapter-img'));
 }
 
 function buildImageSources(image: HTMLImageElement): string[] {
@@ -131,9 +181,7 @@ const mangasOriginesAdapter: SiteAdapter = {
   acquisition: 'live-dom',
   countChapterPageElements: (doc) => getReaderImages(doc).length,
   matches: (url) => url.hostname.toLowerCase() === 'mangas-origines.fr',
-  excludePatterns: [
-    /(?:banner|banniere|discord|logo|avatar|credit|recrutement|promo)/iu,
-  ],
+  excludePatterns: [/(?:banner|banniere|discord|logo|avatar|credit|recrutement|promo)/iu],
   autoExclude: (page) => {
     if (page.width !== undefined && page.width > 0 && page.width < 200) {
       return 'Largeur < 200 px (trop petite)';
@@ -183,7 +231,16 @@ const mangasOriginesAdapter: SiteAdapter = {
     return { series: readWorkTitle(doc), number, label: `Chapitre ${number}` };
   },
   readChapterPages: (doc) => {
-    const pages = getReaderImages(doc)
+    const selection = selectReaderImages(doc);
+    logReaderSelection(selection);
+    if (selection.images.length === 0) {
+      throw new GrandloadError(
+        'ADAPTER_STRUCTURE',
+        'Structure de chapitre mangas-origines non reconnue : aucune planche dans le lecteur.',
+      );
+    }
+
+    const pages = selection.images
       .map((image, index) => {
         const sources = buildImageSources(image);
         if (sources.length === 0) {
@@ -229,4 +286,4 @@ const mangasOriginesAdapter: SiteAdapter = {
   },
 };
 
-export { getChapterNumberFromUrl, mangasOriginesAdapter };
+export { getChapterNumberFromUrl, mangasOriginesAdapter, selectReaderImages };

@@ -24,7 +24,13 @@ type SelectablePage = PageRef & {
 type ChapterDomData = { pages: SelectablePage[]; seriesTitle: string; chapterLabel: string };
 
 function cleanWorkTitle(value: string): string {
-  return value.replace(/\s+/gu, ' ').trim().replace(/^Lire\s+/iu, '').replace(/\s+(?:Scan\s+FR|Scan)\s*$/iu, '').replace(/\s*-\s*Mangas?\s+Origines\s*$/iu, '').trim();
+  return value
+    .replace(/\s+/gu, ' ')
+    .trim()
+    .replace(/^Lire\s+/iu, '')
+    .replace(/\s+(?:Scan\s+FR|Scan)\s*$/iu, '')
+    .replace(/\s*-\s*Mangas?\s+Origines\s*$/iu, '')
+    .trim();
 }
 
 export function getChapterSelectionCounts(items: readonly Pick<SelectablePage, 'selected'>[]): {
@@ -61,27 +67,45 @@ function collectChapterImages(tabId: number, adapterId: string): Promise<Chapter
         args: [adapterId],
         func: (currentAdapterId: string) => {
           const seen = new Set<string>();
-          const preciseSelector =
-            '.ori-lec-scene .reading-content .page-break img.wp-manga-chapter-img';
-          const preciseImages = Array.from(
-            document.querySelectorAll<HTMLImageElement>(preciseSelector),
+          const isMangasOrigines =
+            currentAdapterId === 'mangas-origines' ||
+            window.location.hostname.toLowerCase() === 'mangas-origines.fr';
+          const preciseSelector = 'main.ori-lec-scene .reading-content img.wp-manga-chapter-img';
+          const sceneSelector = 'main.ori-lec-scene img.wp-manga-chapter-img';
+          const classFallbackSelector = 'img.wp-manga-chapter-img';
+          let selector = preciseSelector;
+          let fallbackReason = '';
+          let images = isMangasOrigines
+            ? Array.from(document.querySelectorAll<HTMLImageElement>(preciseSelector))
+            : Array.from(document.querySelectorAll<HTMLImageElement>('img'));
+
+          if (isMangasOrigines && images.length === 0) {
+            images = Array.from(document.querySelectorAll<HTMLImageElement>(sceneSelector));
+            selector = sceneSelector;
+            fallbackReason = `aucune image avec le sélecteur ${preciseSelector}`;
+          }
+          if (isMangasOrigines && images.length === 0) {
+            images = Array.from(
+              document.querySelectorAll<HTMLImageElement>(classFallbackSelector),
+            ).filter(
+              (image) =>
+                !image.closest('header, footer, nav, .main-navigation_wrap, .wrap_branding'),
+            );
+            selector = classFallbackSelector;
+            fallbackReason = `aucune image dans ${sceneSelector}`;
+          }
+          console.info(
+            `[Grandload] Lecture chapitre: adaptateur=${isMangasOrigines ? 'mangas-origines' : currentAdapterId}; ` +
+              `sélecteur="${selector}"; résultats=${images.length}; ` +
+              `repli=${fallbackReason ? `oui (${fallbackReason})` : 'non'}`,
           );
-          const fallbackImages = Array.from(
-            document.querySelectorAll<HTMLImageElement>('img.wp-manga-chapter-img'),
-          );
-          const images =
-            currentAdapterId === 'mangas-origines'
-              ? preciseImages.length > 0
-                ? preciseImages
-                : fallbackImages
-              : Array.from(document.querySelectorAll<HTMLImageElement>('img'));
           let pageNumber = 0;
 
           const pages = images
-            .filter(
-              (image) =>
-                currentAdapterId === 'mangas-origines' ||
-                !image.closest('header, footer, nav, aside, .logo, .avatar, .social'),
+            .filter((image) =>
+              isMangasOrigines
+                ? !image.closest('header, footer, nav, .main-navigation_wrap, .wrap_branding')
+                : !image.closest('header, footer, nav, aside, .logo, .avatar, .social'),
             )
             .flatMap((image, index) => {
               const sources = [
@@ -127,10 +151,15 @@ function collectChapterImages(tabId: number, adapterId: string): Promise<Chapter
 
           const seriesTitle =
             document.querySelector('.ori-lec-titre')?.textContent?.trim() ||
-            cleanWorkTitle(document.querySelector('meta[property="og:title"]')?.getAttribute('content') || document.title) ||
+            cleanWorkTitle(
+              document.querySelector('meta[property="og:title"]')?.getAttribute('content') ||
+                document.title,
+            ) ||
             'Série';
           const chapterMatch = window.location.pathname.match(/\/chapitre-(\d+)(?:-(\d+))?\/?$/iu);
-          const chapterNumber = chapterMatch?.[1] ? Number(chapterMatch[1]) + (chapterMatch[2] ? Number(`0.${chapterMatch[2]}`) : 0) : 0;
+          const chapterNumber = chapterMatch?.[1]
+            ? Number(chapterMatch[1]) + (chapterMatch[2] ? Number(`0.${chapterMatch[2]}`) : 0)
+            : 0;
           const chapterLabel = `Chapitre ${chapterNumber}`;
           return { pages, seriesTitle, chapterLabel };
         },
@@ -410,7 +439,10 @@ const chapterDownloadModule: GrandloadModule = {
       if (!job.warning) {
         return '';
       }
-      return job.warning.message || `Le fichier a été enregistré sous ${job.warning.actual} (nom demandé : ${job.warning.requested}). Une autre extension ou un réglage du navigateur a peut-être modifié le nom.`;
+      return (
+        job.warning.message ||
+        `Le fichier a été enregistré sous ${job.warning.actual} (nom demandé : ${job.warning.requested}). Une autre extension ou un réglage du navigateur a peut-être modifié le nom.`
+      );
     };
 
     const jobTitle = (job: Job): string => {
@@ -733,7 +765,9 @@ const chapterDownloadModule: GrandloadModule = {
         const patterns = new Set<string>(currentExclusions.urlPatterns);
         for (const item of excludedItems) {
           // Si une image contient un segment reconnaissable (ex. 'banner', 'discord', etc.)
-          const match = item.url.match(/(?:banner|banniere|discord|credit|promo|recrutement|fin)/iu);
+          const match = item.url.match(
+            /(?:banner|banniere|discord|credit|promo|recrutement|fin)/iu,
+          );
           if (match) {
             patterns.add(match[0].toLowerCase());
           }

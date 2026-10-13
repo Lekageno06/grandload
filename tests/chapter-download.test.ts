@@ -6,8 +6,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { genericAdapter } from '../src/adapters/generic';
 import { getChapterNumberFromUrl, mangasOriginesAdapter } from '../src/adapters/mangas-origines';
 import { autoScrollUntilStable } from '../src/content/scroll-loader';
+import { processPageExclusions } from '../src/modules/chapter-download/exclusions';
 
-function readMangasOriginesFixture(name: 'series.html' | 'chapter.html'): string {
+function readMangasOriginesFixture(
+  name: 'series.html' | 'chapter.html' | 'chapter-the-boxer.html',
+): string {
   const fixtureUrl = new URL(`./fixtures/mangas-origines/${name}`, import.meta.url);
   return readFileSync(fileURLToPath(fixtureUrl), 'utf8');
 }
@@ -54,8 +57,15 @@ describe('mangas-origines adapter', () => {
     const doc = new JSDOM(readMangasOriginesFixture('chapter.html'), {
       url: 'https://mangas-origines.fr/oeuvre/overgeared/chapitre-320/',
     }).window.document;
-    expect(mangasOriginesAdapter.readChapterMeta(doc, 'https://mangas-origines.fr/oeuvre/overgeared/chapitre-129-5/')).toEqual({
-      series: 'Overgeared', number: 129.5, label: 'Chapitre 129.5',
+    expect(
+      mangasOriginesAdapter.readChapterMeta(
+        doc,
+        'https://mangas-origines.fr/oeuvre/overgeared/chapitre-129-5/',
+      ),
+    ).toEqual({
+      series: 'Overgeared',
+      number: 129.5,
+      label: 'Chapitre 129.5',
     });
   });
 
@@ -111,6 +121,46 @@ describe('mangas-origines adapter', () => {
         { length: fixtureImages.length },
         (_value, index) => `page_${String(index + 1).padStart(4, '0')}.webp`,
       ),
+    );
+  });
+
+  it('reads exactly the reader pages and excludes the header logo', () => {
+    const doc = new JSDOM(readMangasOriginesFixture('chapter-the-boxer.html'), {
+      url: 'https://mangas-origines.fr/oeuvre/the-boxer/chapitre-119/',
+    }).window.document;
+
+    const pages = mangasOriginesAdapter.readChapterPages(doc);
+
+    expect(pages).toHaveLength(16);
+    expect(pages.some((page) => page.url.includes('logos_oritest2-2.png'))).toBe(false);
+    expect(pages.map((page) => new URL(page.url).pathname.split('/').pop())).toEqual(
+      Array.from(
+        { length: 16 },
+        (_value, index) => `img_${String(index + 1).padStart(4, '0')}_TheBoxer.webp`,
+      ),
+    );
+  });
+
+  it('keeps the same 16 pages when pre-exclusion is disabled', () => {
+    const doc = new JSDOM(readMangasOriginesFixture('chapter-the-boxer.html'), {
+      url: 'https://mangas-origines.fr/oeuvre/the-boxer/chapitre-119/',
+    }).window.document;
+    const pages = mangasOriginesAdapter.readChapterPages(doc);
+    const processed = processPageExclusions(pages, mangasOriginesAdapter, false);
+
+    expect(processed).toHaveLength(16);
+    expect(processed.every((page) => !page.excluded)).toBe(true);
+    expect(processed.some((page) => page.url.includes('logos_oritest2-2.png'))).toBe(false);
+  });
+
+  it('signale une structure adaptateur invalide quand aucune planche n’est trouvée', () => {
+    const doc = new JSDOM(
+      '<main class="ori-lec-scene"><div class="reading-content"></div></main>',
+      { url: 'https://mangas-origines.fr/oeuvre/the-boxer/chapitre-119/' },
+    ).window.document;
+
+    expect(() => mangasOriginesAdapter.readChapterPages(doc)).toThrowError(
+      'Structure de chapitre mangas-origines non reconnue',
     );
   });
 
