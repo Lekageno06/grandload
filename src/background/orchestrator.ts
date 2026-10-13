@@ -307,6 +307,12 @@ function getBlobUrls(result: ArchiveBuildResult): string[] {
   return result.kind === 'archive' ? [result.blobUrl] : result.files.map((file) => file.blobUrl);
 }
 
+function getArchiveSize(result: ArchiveBuildResult): number {
+  return result.kind === 'archive'
+    ? result.size
+    : result.files.reduce((total, file) => total + file.size, 0);
+}
+
 function artifactDownloads(
   result: ArchiveBuildResult,
   meta: ArchiveMeta,
@@ -521,6 +527,24 @@ export async function runChapterJob(jobId: string): Promise<void> {
     result = await buildArchiveInCurrentRuntime(jobId, params);
     const urls = getBlobUrls(result);
     await updateJob(jobId, (job) => ({ ...job, params: { ...job.params, blobUrls: urls } }));
+
+    const minimumArchiveBytes = params.options.minimumArchiveBytes;
+    if (
+      typeof minimumArchiveBytes === 'number' &&
+      Number.isFinite(minimumArchiveBytes) &&
+      getArchiveSize(result) < minimumArchiveBytes
+    ) {
+      await updateJob(jobId, (job) => ({
+        ...job,
+        state: 'ignored',
+        progress: { done: params.pages.length, total: params.pages.length },
+        error: {
+          code: 'ARCHIVE_TOO_SMALL',
+          message: `Chapitre ignoré : archive inférieure à ${Math.round(minimumArchiveBytes / 1024 / 1024)} Mo.`,
+        },
+      }));
+      return;
+    }
 
     const packager = getPackagerMetadata(params.packagerId);
     if (!packager) {

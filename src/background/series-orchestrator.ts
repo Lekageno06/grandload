@@ -60,6 +60,8 @@ type SeriesChapterParams = {
 
 type HistoryEntry = { number: number; label: string; url: string; completedAt: number };
 
+export const SERIES_MINIMUM_ARCHIVE_BYTES = 1024 * 1024;
+
 function makeId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
@@ -185,7 +187,7 @@ export async function createSeriesJob(
       downloadFolder: params.downloadFolder,
       ...(params.destinationTemplate ? { destinationTemplate: params.destinationTemplate } : {}),
       destinationMode: params.destinationMode ?? 'browser',
-      options: {},
+      options: { minimumArchiveBytes: SERIES_MINIMUM_ARCHIVE_BYTES },
     } satisfies SeriesChapterParams,
     progress: { done: 0, total: 0 },
     createdAt: now,
@@ -739,6 +741,7 @@ async function processSeriesChild(parentId: string, childId: string): Promise<vo
           ? { destinationTemplate: seriesParams.destinationTemplate }
           : {}),
         destinationMode: seriesParams.destinationMode,
+        minimumArchiveBytes: SERIES_MINIMUM_ARCHIVE_BYTES,
       },
     };
     await updateJob(childId, (current) => ({

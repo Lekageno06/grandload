@@ -22,6 +22,7 @@ import {
   recoverSeriesJobs,
   restartTerminalSeriesJob,
   runSeriesJob,
+  SERIES_MINIMUM_ARCHIVE_BYTES,
   waitForRateLimitBackoff,
   withTemporaryTab,
 } from '../src/background/series-orchestrator';
@@ -130,6 +131,7 @@ function childJob(id: string, parentId: string, state: Job['state'] = 'queued'):
       packagerId: 'cbz',
       chapter: chapters[0],
       requestDelayMs: 1500,
+      options: { minimumArchiveBytes: SERIES_MINIMUM_ARCHIVE_BYTES },
     },
     progress: { done: 0, total: 1 },
     createdAt: Date.now(),
@@ -338,12 +340,15 @@ describe('series download', () => {
 
   it('continues to the next child after one chapter archive fails', async () => {
     const failedChapter = chapters[0];
+    const smallChapter = chapters[1];
     const successfulChapter = chapters[1];
-    if (!failedChapter || !successfulChapter) throw new Error('Chapitres de test absents.');
+    if (!failedChapter || !smallChapter || !successfulChapter) throw new Error('Chapitres de test absents.');
     const failedChild = childJob('failed-chapter', 'series-parent');
+    const smallChild = childJob('small-chapter', 'series-parent');
     const successfulChild = childJob('successful-chapter', 'series-parent');
     for (const [child, chapter] of [
       [failedChild, failedChapter],
+      [smallChild, smallChapter],
       [successfulChild, successfulChapter],
     ] as const) {
       child.params = {
@@ -354,11 +359,12 @@ describe('series download', () => {
       };
       child.progress = { done: 0, total: 1 };
     }
-    const parent = parentJob([failedChild.id, successfulChild.id]);
+    const parent = parentJob([failedChild.id, smallChild.id, successfulChild.id]);
     parent.params = { ...parent.params, requestDelayMs: 0, packagerId: 'cbz' };
     await setJobs({
       [parent.id]: parent,
       [failedChild.id]: failedChild,
+      [smallChild.id]: smallChild,
       [successfulChild.id]: successfulChild,
     });
 
@@ -384,7 +390,13 @@ describe('series download', () => {
             if (message.type === 'BUILD_ARCHIVE') {
               callback?.({
                 ok: true,
-                data: { kind: 'archive', blobUrl: 'blob:successful', size: 10 },
+                data: message.payload?.jobId === smallChild.id
+                  ? { kind: 'archive', blobUrl: 'blob:small', size: 10 }
+                  : {
+                  kind: 'archive',
+                  blobUrl: 'blob:successful',
+                  size: SERIES_MINIMUM_ARCHIVE_BYTES,
+                },
               });
               return;
             }
@@ -425,9 +437,11 @@ describe('series download', () => {
 
     const jobs = await getJobs();
     expect(jobs[failedChild.id]?.state).toBe('failed');
+    expect(jobs[smallChild.id]?.state).toBe('ignored');
+    expect(jobs[smallChild.id]?.error?.code).toBe('ARCHIVE_TOO_SMALL');
     expect(jobs[successfulChild.id]?.state).toBe('done');
     expect(jobs[parent.id]?.state).toBe('done');
-    expect(jobs[parent.id]?.params.summary).toEqual({ succeeded: 1, failed: 1, ignored: 0 });
+    expect(jobs[parent.id]?.params.summary).toEqual({ succeeded: 1, failed: 1, ignored: 1 });
     expect(requestedDownloads).toEqual(['blob:successful']);
     expect(downloadSearchCount).toBe(2);
   });
