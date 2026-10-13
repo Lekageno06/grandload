@@ -3,6 +3,7 @@ import { getAdapter } from '../core/registry';
 import { toGrandloadError } from '../core/errors';
 import type { MessageKind, MessagePayloadMap, MessageResultMap } from '../core/messaging';
 import { readPageAssets } from './dom-reader';
+import { autoScrollUntilStable } from './scroll-loader';
 
 type ContentRequest = { type: MessageKind; payload: Record<string, unknown> };
 
@@ -22,9 +23,21 @@ async function handleContentRequest<
   T extends 'READ_SERIES' | 'READ_CHAPTER_PAGES' | 'READ_CHAPTER_META' | 'READ_PAGE_ASSETS',
 >(type: T, payload: MessagePayloadMap[T]): Promise<MessageResultMap[T]> {
   if (type === 'READ_PAGE_ASSETS') {
+    const pagePayload = payload as MessagePayloadMap['READ_PAGE_ASSETS'];
+    if (pagePayload.loadLazy) {
+      await autoScrollUntilStable({
+        document,
+        ...(document.defaultView ? { windowRef: document.defaultView } : {}),
+        pageCountProvider: () => readPageAssets(document, pagePayload.pageUrl).length,
+        scrollStep: 700,
+        maxScrolls: 20,
+        stabilizationWindow: 2,
+        delayMs: 150,
+      });
+    }
     return readPageAssets(
       document,
-      (payload as MessagePayloadMap['READ_PAGE_ASSETS']).pageUrl,
+      pagePayload.pageUrl,
     ) as MessageResultMap[T];
   }
 

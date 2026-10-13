@@ -19,6 +19,7 @@ function addCandidate(
   pageUrl: string,
   overrideLabel?: string,
   provenance?: AssetProvenance,
+  dimensions?: { width?: number; height?: number },
 ): void {
   const normalized = normalizeUrl(rawUrl, pageUrl);
 
@@ -37,6 +38,8 @@ function addCandidate(
     label,
     source,
     ...(provenance ? { provenance } : {}),
+    ...(dimensions?.width ? { width: dimensions.width } : {}),
+    ...(dimensions?.height ? { height: dimensions.height } : {}),
   });
 }
 
@@ -87,6 +90,10 @@ export function readPageAssets(doc: Document, pageUrl: string): ScanItem[] {
           pageUrl,
           img.getAttribute('alt') || getBaseNameFromUrl(candidate),
           getImageProvenance(img),
+          {
+            width: Number(img.getAttribute('width')) || (img as HTMLImageElement).naturalWidth,
+            height: Number(img.getAttribute('height')) || (img as HTMLImageElement).naturalHeight,
+          },
         );
       }
     }

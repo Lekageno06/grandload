@@ -11,6 +11,8 @@ export interface ScanItem {
   label: string;
   source: ScanSource;
   provenance?: AssetProvenance;
+  width?: number;
+  height?: number;
 }
 
 export interface ScanFilterState {

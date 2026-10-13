@@ -1,9 +1,12 @@
 import { send } from '../../core/messaging';
 import { registerModule } from '../../core/registry';
 import type { GrandloadModule, ModuleApi, PageContext } from '../../core/types';
+import { ImageGallery, ImageToolbar } from '../../ui/components/gallery';
+import type { GalleryItem } from '../../ui/components/gallery';
 import { exportCsv, exportJson, exportTxt } from './exports';
 import { filterScanItems, getTypeCounts } from './filters';
 import type { ScanFilterState, ScanItem } from './types';
+import { getScanStateMessage, type ScanViewState } from './state';
 
 const typeOptions = [
   'all',
@@ -35,20 +38,37 @@ function injectContentReader(tabId: number): Promise<void> {
   });
 }
 
-function scanCurrentPageInTab(tabId: number, pageUrl: string): Promise<ScanItem[]> {
+function scanCurrentPageInTab(
+  tabId: number,
+  pageUrl: string,
+  loadLazy: boolean,
+): Promise<ScanItem[]> {
   return injectContentReader(tabId).then(
     () =>
-      new Promise<ScanItem[]>((resolve) => {
+      new Promise<ScanItem[]>((resolve, reject) => {
         chrome.tabs.sendMessage(
           tabId,
-          { type: 'READ_PAGE_ASSETS', payload: { pageUrl } },
+          { type: 'READ_PAGE_ASSETS', payload: { pageUrl, loadLazy } },
           (response: { ok?: boolean; data?: ScanItem[] } | undefined) => {
             const runtimeError = chrome.runtime.lastError;
-            resolve(runtimeError || !response?.ok || !response.data ? [] : response.data);
+            if (runtimeError) {
+              reject(new Error(runtimeError.message ?? 'Lecture de la page impossible.'));
+              return;
+            }
+            if (!response?.ok || !response.data) {
+              reject(new Error('Lecture de la page impossible.'));
+              return;
+            }
+            resolve(response.data);
           },
         );
       }),
   );
+}
+
+function isPermissionError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /permission|access|autorisation|not allowed|cannot access/iu.test(message);
 }
 function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): void {
   const state: ModuleState = {
@@ -66,6 +86,22 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
   emptyMessage.textContent = 'Aucune ressource détectée sur cette page.';
   emptyMessage.hidden = true;
   wrapper.appendChild(emptyMessage);
+
+  const scanState = document.createElement('p');
+  scanState.className = 'ui-scan-state ui-muted mb-0';
+  scanState.textContent = getScanStateMessage('idle');
+  wrapper.appendChild(scanState);
+
+  const lazyLabel = document.createElement('label');
+  lazyLabel.className = 'form-check d-flex align-items-center gap-2 mb-0';
+  const lazyCheckbox = document.createElement('input');
+  lazyCheckbox.type = 'checkbox';
+  lazyCheckbox.className = 'form-check-input';
+  lazyCheckbox.checked = true;
+  const lazyText = document.createElement('span');
+  lazyText.textContent = 'Charger les images paresseuses';
+  lazyLabel.append(lazyCheckbox, lazyText);
+  wrapper.appendChild(lazyLabel);
 
   const filterPanel = document.createElement('div');
   filterPanel.className = 'row g-2';
@@ -174,6 +210,42 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
   list.className = 'list-group mt-3';
   wrapper.appendChild(list);
 
+  const imageSection = document.createElement('section');
+  imageSection.className = 'ui-scan-gallery';
+  imageSection.hidden = true;
+  wrapper.appendChild(imageSection);
+  let gallery: ImageGallery | undefined;
+
+  const renderGallery = (): void => {
+    const imageItems: GalleryItem[] = state.items
+      .filter((item) => item.type === 'image')
+      .map((item) => ({
+        id: item.id,
+        url: item.url,
+        label: item.label,
+        ext: item.ext,
+        ...(item.width ? { width: item.width } : {}),
+        ...(item.height ? { height: item.height } : {}),
+        ...(item.provenance ? { provenance: item.provenance } : {}),
+        selected: state.selectedIds.has(item.id),
+      }));
+    imageSection.replaceChildren();
+    if (imageItems.length === 0) {
+      imageSection.hidden = true;
+      gallery = undefined;
+      return;
+    }
+    imageSection.hidden = false;
+    const toolbar = new ImageToolbar((filters) => gallery?.setFilters(filters));
+    gallery = new ImageGallery(imageItems, {
+      onSelectionChange: (selected) => {
+        state.selectedIds = new Set(selected.map((item) => item.id));
+        updateButtons();
+      },
+    });
+    imageSection.append(toolbar.element, gallery.element);
+  };
+
   const updateButtons = (): void => {
     const selectedCount = state.selectedIds.size;
     downloadButton.disabled = selectedCount === 0;
@@ -248,6 +320,7 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
   const refresh = (): void => {
     renderBadges();
     renderList();
+    renderGallery();
     updateButtons();
   };
 
@@ -378,11 +451,33 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
       return;
     }
 
-    const results = await scanCurrentPageInTab(ctx.tabId, ctx.url);
-    state.items = results;
-    renderBadges();
-    renderList();
-    updateButtons();
+    const setScanState = (viewState: ScanViewState, count = 0): void => {
+      scanState.textContent = getScanStateMessage(viewState, count);
+      scanState.dataset.state = viewState;
+      scanState.className = `ui-scan-state ui-muted mb-0${
+        viewState === 'error' || viewState === 'permission' ? ' text-danger' : ''
+      }`;
+    };
+
+    setScanState('loading');
+    try {
+      const results = await scanCurrentPageInTab(ctx.tabId, ctx.url, lazyCheckbox.checked);
+      state.items = results;
+      renderBadges();
+      renderList();
+      renderGallery();
+      updateButtons();
+      setScanState(results.length === 0 ? 'empty' : 'results', results.length);
+    } catch (error: unknown) {
+      const permission = isPermissionError(error);
+      setScanState(permission ? 'permission' : 'error');
+      emptyMessage.hidden = false;
+      emptyMessage.className = 'alert alert-danger mb-0';
+      emptyMessage.textContent = permission
+        ? 'Cliquez sur l’icône Grandload pour autoriser la lecture de cet onglet.'
+        : `Le scan a échoué : ${error instanceof Error ? error.message : String(error)}`;
+      updateButtons();
+    }
   };
 
   void load();

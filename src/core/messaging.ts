@@ -27,7 +27,7 @@ export interface MessagePayloadMap {
   PAGE_CONTEXT: { tabId: number };
   READ_CHAPTER_PAGES: { adapterId: string };
   READ_CHAPTER_META: { adapterId: string };
-  READ_PAGE_ASSETS: { pageUrl: string };
+  READ_PAGE_ASSETS: { pageUrl: string; loadLazy?: boolean };
   READ_SERIES: { adapterId: string };
   JOB_CREATE: { kind: 'chapter' | 'series' | 'links'; params: Record<string, unknown> };
   JOB_CONTROL: { jobId: string; action: 'pause' | 'resume' | 'cancel' | 'retry' };

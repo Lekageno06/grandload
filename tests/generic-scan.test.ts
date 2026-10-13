@@ -4,10 +4,22 @@ import { classifyResource } from '../src/modules/generic-scan/classify';
 import { exportCsv } from '../src/modules/generic-scan/exports';
 import { filterScanItems } from '../src/modules/generic-scan/filters';
 import { readPageAssets } from '../src/content/dom-reader';
+import { getScanStateMessage } from '../src/modules/generic-scan/state';
 import { genericAdapter } from '../src/adapters/generic';
 import type { ScanItem } from '../src/modules/generic-scan/types';
 import { JSDOM } from 'jsdom';
 import { dedupeUrls, getBestSrcsetCandidate, normalizeUrl } from '../src/shared/url-utils';
+
+describe('états du scan générique', () => {
+  it('couvre l’attente, le chargement, les résultats, l’absence, l’erreur et l’autorisation', () => {
+    expect(getScanStateMessage('idle')).toBe('Aucun scan lancé.');
+    expect(getScanStateMessage('loading')).toBe('Scan en cours…');
+    expect(getScanStateMessage('results', 3)).toBe('3 ressource(s) détectée(s).');
+    expect(getScanStateMessage('empty')).toBe('Aucun résultat.');
+    expect(getScanStateMessage('error')).toBe('Erreur pendant le scan.');
+    expect(getScanStateMessage('permission')).toContain('Autorisation requise');
+  });
+});
 
 describe('url-utils', () => {
   it('accepts only http and https URLs and strips fragments during dedupe', () => {
@@ -64,7 +76,7 @@ describe('lecture DOM unique et provenance des images', () => {
       `
       <header><img src="/logo.png" alt="Logo"></header>
       <nav><img src="/icon.png" alt="Icône"></nav>
-      <main><img src="/cover.jpg" alt="Couverture"></main>
+      <main><img src="/cover.jpg" alt="Couverture" width="640" height="960"></main>
     `,
       { url: 'https://example.test/page' },
     ).window.document;
@@ -74,6 +86,10 @@ describe('lecture DOM unique et provenance des images', () => {
 
     expect(images).toHaveLength(3);
     expect(images.map((item) => item.provenance).sort()).toEqual(['header', 'main', 'navigation']);
+    expect(images.find((item) => item.label === 'Couverture')).toMatchObject({
+      width: 640,
+      height: 960,
+    });
   });
 });
 
