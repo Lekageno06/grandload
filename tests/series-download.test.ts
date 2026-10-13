@@ -59,6 +59,7 @@ function makeHtmlAdapter(id: string): SiteAdapter {
     matches: (url) => url.hostname === 'example.test',
     classify: () => 'chapter',
     readSeries: () => ({ title: 'Test', chapters: [] }),
+    readChapterMeta: () => ({ series: 'Test', number: 1, label: 'Chapitre 1' }),
     countChapterPageElements: (doc) => doc.querySelectorAll('img.chapter-page').length,
     readChapterPages: (doc): PageRef[] =>
       Array.from(doc.querySelectorAll<HTMLImageElement>('img.chapter-page')).flatMap((image, index) => {
