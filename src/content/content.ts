@@ -6,6 +6,7 @@ import { readPageAssets } from './dom-reader';
 import { autoScrollUntilStable } from './scroll-loader';
 
 type ContentRequest = { type: MessageKind; payload: Record<string, unknown> };
+let activeAssetScan: AbortController | undefined;
 
 function isContentRequest(value: unknown): value is ContentRequest {
   return (
@@ -20,10 +21,16 @@ function isContentRequest(value: unknown): value is ContentRequest {
 }
 
 async function handleContentRequest<
-  T extends 'READ_SERIES' | 'READ_CHAPTER_PAGES' | 'READ_CHAPTER_META' | 'READ_PAGE_ASSETS',
+  T extends 'READ_SERIES' | 'READ_CHAPTER_PAGES' | 'READ_CHAPTER_META' | 'READ_PAGE_ASSETS' | 'STOP_PAGE_ASSETS',
 >(type: T, payload: MessagePayloadMap[T]): Promise<MessageResultMap[T]> {
+  if (type === 'STOP_PAGE_ASSETS') {
+    activeAssetScan?.abort();
+    return undefined as MessageResultMap[T];
+  }
   if (type === 'READ_PAGE_ASSETS') {
     const pagePayload = payload as MessagePayloadMap['READ_PAGE_ASSETS'];
+    activeAssetScan?.abort();
+    activeAssetScan = new AbortController();
     if (pagePayload.loadLazy) {
       await autoScrollUntilStable({
         document,
@@ -33,12 +40,18 @@ async function handleContentRequest<
         maxScrolls: 20,
         stabilizationWindow: 2,
         delayMs: 150,
+        signal: activeAssetScan.signal,
+        onProgress: (step, count) => {
+          chrome.runtime.sendMessage({
+            type: 'GRANDLOAD_SCAN_PROGRESS',
+            payload: { step, count },
+          });
+        },
       });
     }
-    return readPageAssets(
-      document,
-      pagePayload.pageUrl,
-    ) as MessageResultMap[T];
+    const result = readPageAssets(document, pagePayload.pageUrl) as MessageResultMap[T];
+    activeAssetScan = undefined;
+    return result;
   }
 
   const adapter = getAdapter(
@@ -72,6 +85,11 @@ if (!contentGlobal.__grandloadContentReader) {
   contentGlobal.__grandloadContentReader = true;
   chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
     if (!isContentRequest(message)) {
+      return false;
+    }
+    if (message.type === 'STOP_PAGE_ASSETS') {
+      activeAssetScan?.abort();
+      sendResponse({ ok: true });
       return false;
     }
     if (

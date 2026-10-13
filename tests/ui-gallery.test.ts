@@ -62,4 +62,21 @@ describe('ImageGallery', () => {
     expect(cards.map((card) => card.dataset.itemId)).toEqual(['2', '1']);
     expect(gallery.element.textContent).toContain('Pré-exclusion : dernière planche');
   });
+
+  it('filtre les miniatures probables et trie par surface', () => {
+    const gallery = new ImageGallery([
+      {
+        id: 'small', url: 'https://example.test/small.jpg', label: 'Petite', ext: 'jpg',
+        width: 120, height: 120, likelyThumbnail: true,
+      },
+      {
+        id: 'large', url: 'https://example.test/large.jpg', label: 'Grande', ext: 'jpg',
+        width: 1000, height: 800,
+      },
+    ]);
+
+    gallery.setFilters({ hideLikelyThumbnails: true, sort: 'surface' });
+    expect([...gallery.element.querySelectorAll<HTMLElement>('.ui-gallery-card')]
+      .map((card) => card.dataset.itemId)).toEqual(['large']);
+  });
 });

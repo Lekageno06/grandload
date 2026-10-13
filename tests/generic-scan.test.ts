@@ -110,6 +110,36 @@ describe('lecture DOM unique et provenance des images', () => {
       height: 960,
     });
   });
+
+  it('détecte les sources d’images avancées et garde la meilleure URL', () => {
+    const document = new JSDOM(
+      `
+      <main>
+        <img src=" /low.jpg " srcset="/low.jpg 1x, /high.jpg 2x" data-lazy-src="/lazy.jpg">
+        <picture><source srcset="/picture-small.webp 1x, /picture-large.webp 2x"></picture>
+        <video poster=" /poster.jpg "></video>
+        <svg><use href="/sprite.svg#icon"></use></svg>
+        <div style="background-image: url('/inline.jpg')"></div>
+        <meta property="og:image" content=" /og.jpg ">
+        <link rel="icon" href=" /favicon.ico ">
+      </main>
+      `,
+      { url: 'https://example.test/page' },
+    ).window.document;
+
+    const images = readPageAssets(document, document.location.href).filter((item) => item.type === 'image');
+    expect(images.map((item) => item.url)).toEqual(expect.arrayContaining([
+      'https://example.test/high.jpg',
+      'https://example.test/picture-large.webp',
+      'https://example.test/poster.jpg',
+      'https://example.test/sprite.svg',
+      'https://example.test/inline.jpg',
+      'https://example.test/og.jpg',
+      'https://example.test/favicon.ico',
+    ]));
+    expect(images.find((item) => item.url.endsWith('/favicon.ico'))?.source).toBe('icon');
+    expect(images.find((item) => item.url.endsWith('/poster.jpg'))?.source).toBe('poster');
+  });
 });
 
 describe('filters', () => {

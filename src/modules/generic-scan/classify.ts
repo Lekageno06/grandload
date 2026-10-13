@@ -44,7 +44,15 @@ export function classifyResource(url: string, source: ScanSource | string = 'oth
     return 'link';
   }
 
-  if (normalizedSource === 'img' || normalizedSource === 'picture' || normalizedSource === 'meta') {
+  if (
+    normalizedSource === 'img' ||
+    normalizedSource === 'picture' ||
+    normalizedSource === 'meta' ||
+    normalizedSource === 'poster' ||
+    normalizedSource === 'icon' ||
+    normalizedSource === 'svg' ||
+    normalizedSource === 'style'
+  ) {
     return 'image';
   }
 

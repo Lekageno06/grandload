@@ -1,6 +1,18 @@
 export type ResourceType = 'image' | 'video' | 'audio' | 'document' | 'archive' | 'link' | 'other';
 export type ScanSource =
-  'a' | 'img' | 'picture' | 'video' | 'audio' | 'source' | 'link' | 'meta' | 'iframe' | 'style';
+  | 'a'
+  | 'img'
+  | 'picture'
+  | 'video'
+  | 'audio'
+  | 'source'
+  | 'link'
+  | 'meta'
+  | 'iframe'
+  | 'style'
+  | 'poster'
+  | 'icon'
+  | 'svg';
 export type AssetProvenance = 'header' | 'footer' | 'navigation' | 'main' | 'content';
 
 export interface ScanItem {

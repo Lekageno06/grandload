@@ -6,6 +6,8 @@ export type ScrollLoaderOptions = {
   maxScrolls?: number;
   stabilizationWindow?: number;
   delayMs?: number;
+  signal?: AbortSignal;
+  onProgress?: (step: number, count: number) => void;
 };
 
 function wait(ms: number): Promise<void> {
@@ -27,8 +29,10 @@ export async function autoScrollUntilStable(options: ScrollLoaderOptions): Promi
   const history: number[] = [];
 
   for (let step = 0; step < maxScrolls; step += 1) {
+    if (options.signal?.aborted) return pageCountProvider();
     const count = pageCountProvider();
     history.push(count);
+    options.onProgress?.(step + 1, count);
 
     if (history.length >= stabilizationWindow) {
       const lastValues = history.slice(-stabilizationWindow);

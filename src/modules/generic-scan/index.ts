@@ -9,6 +9,7 @@ import type { ScanFilterState, ScanItem } from './types';
 import { archiveWarning, getScanStateMessage, type ScanViewState } from './state';
 import { createDestinationPicker } from '../../destinations/picker';
 import { getPrefs } from '../../core/storage';
+import { tabs as createTabs } from '../../ui/components/components';
 
 const typeOptions = [
   'all',
@@ -80,8 +81,14 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
   };
 
   const wrapper = document.createElement('div');
-  wrapper.className = 'd-grid gap-3';
+  wrapper.className = 'ui-stack';
   root.appendChild(wrapper);
+
+  const tabs = createTabs(['Images', 'Liens et médias']);
+  const [imagesTab, linksTab] = [...tabs.querySelectorAll<HTMLButtonElement>('.ui-tab')];
+  if (!imagesTab || !linksTab) return;
+  wrapper.appendChild(tabs);
+  let activeView: 'images' | 'links' = 'images';
 
   const emptyMessage = document.createElement('div');
   emptyMessage.className = 'alert alert-info mb-0';
@@ -93,6 +100,28 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
   scanState.className = 'ui-scan-state ui-muted mb-0';
   scanState.textContent = getScanStateMessage('idle');
   wrapper.appendChild(scanState);
+
+  const progressListener = (
+    message: unknown,
+    sender: chrome.runtime.MessageSender,
+  ): void => {
+    if (
+      !message ||
+      typeof message !== 'object' ||
+      (message as { type?: unknown }).type !== 'GRANDLOAD_SCAN_PROGRESS' ||
+      sender.tab?.id !== ctx.tabId
+    ) return;
+    const payload = (message as { payload?: { step?: number; count?: number } }).payload;
+    scanState.textContent = `Scan en cours… étape ${payload?.step ?? 0}, ${payload?.count ?? 0} ressource(s) détectée(s).`;
+  };
+  chrome.runtime.onMessage?.addListener(progressListener);
+
+  const stopScanButton = document.createElement('button');
+  stopScanButton.type = 'button';
+  stopScanButton.className = 'btn btn-outline-danger';
+  stopScanButton.textContent = 'Arrêter';
+  stopScanButton.hidden = true;
+  wrapper.appendChild(stopScanButton);
 
   const lazyLabel = document.createElement('label');
   lazyLabel.className = 'form-check d-flex align-items-center gap-2 mb-0';
@@ -143,7 +172,7 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
   }
 
   const actionRow = document.createElement('div');
-  actionRow.className = 'd-flex flex-wrap gap-2';
+  actionRow.className = 'ui-actions ui-row';
   wrapper.appendChild(actionRow);
 
   const selectAllButton = document.createElement('button');
@@ -191,6 +220,11 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
   txtButton.textContent = 'TXT';
   txtButton.disabled = true;
 
+  const rescanButton = document.createElement('button');
+  rescanButton.type = 'button';
+  rescanButton.className = 'btn';
+  rescanButton.textContent = 'Rescanner';
+
   for (const button of [
     selectAllButton,
     selectNoneButton,
@@ -200,6 +234,7 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
     csvButton,
     jsonButton,
     txtButton,
+    rescanButton,
   ]) {
     actionRow.appendChild(button);
   }
@@ -223,7 +258,7 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
   const archiveName = document.createElement('input');
   archiveName.type = 'text';
   archiveName.className = 'form-control form-control-sm';
-  archiveName.value = 'grandload-export';
+  archiveName.value = document.title.trim() || new URL(ctx.url).hostname;
   archiveName.maxLength = 150;
   archiveName.placeholder = 'Nom de l’archive';
   const archiveEstimate = document.createElement('small');
@@ -239,7 +274,7 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
   wrapper.appendChild(badges);
 
   const list = document.createElement('ul');
-  list.className = 'list-group mt-3';
+  list.className = 'ui-stack';
   wrapper.appendChild(list);
 
   const imageSection = document.createElement('section');
@@ -247,6 +282,23 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
   imageSection.hidden = true;
   wrapper.appendChild(imageSection);
   let gallery: ImageGallery | undefined;
+
+  const renderView = (): void => {
+    const showingImages = activeView === 'images';
+    imageSection.hidden = !showingImages;
+    list.hidden = showingImages;
+    imagesTab.setAttribute('aria-selected', String(showingImages));
+    linksTab.setAttribute('aria-selected', String(!showingImages));
+  };
+
+  imagesTab.addEventListener('click', () => {
+    activeView = 'images';
+    renderView();
+  });
+  linksTab.addEventListener('click', () => {
+    activeView = 'links';
+    renderView();
+  });
 
   const renderGallery = (): void => {
     const imageItems: GalleryItem[] = state.items
@@ -260,6 +312,13 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
         ...(item.height ? { height: item.height } : {}),
         ...(item.provenance ? { provenance: item.provenance } : {}),
         selected: state.selectedIds.has(item.id),
+        ...(item.width !== undefined && item.height !== undefined
+          ? { likelyThumbnail: item.width < 200 || item.height < 200 }
+          : {}),
+        ...(item.width !== undefined && item.height !== undefined &&
+        (item.width < 200 || item.height < 200)
+          ? { badge: 'Miniature probable' }
+          : {}),
       }));
     imageSection.replaceChildren();
     if (imageItems.length === 0) {
@@ -364,6 +423,7 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
     renderList();
     renderGallery();
     updateButtons();
+    renderView();
   };
 
   const syncFilters = (): void => {
@@ -541,6 +601,7 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
       scanState.className = `ui-scan-state ui-muted mb-0${
         viewState === 'error' || viewState === 'permission' ? ' text-danger' : ''
       }`;
+      stopScanButton.hidden = viewState !== 'loading';
     };
 
     setScanState('loading');
@@ -563,6 +624,17 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
       updateButtons();
     }
   };
+
+  stopScanButton.addEventListener('click', () => {
+    stopScanButton.disabled = true;
+    chrome.tabs.sendMessage(ctx.tabId, { type: 'STOP_PAGE_ASSETS', payload: {} });
+    api.setStatus?.('Arrêt du chargement des images demandé.');
+  });
+
+  rescanButton.addEventListener('click', () => {
+    void load();
+  });
+  renderView();
 
   void load();
 }

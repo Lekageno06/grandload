@@ -263,4 +263,29 @@ describe('scroll loader', () => {
     expect(result).toBe(3);
     expect(windowLike.scrollTo).toHaveBeenCalled();
   });
+
+  it('s’arrête lorsqu’un scan paresseux est annulé', async () => {
+    const controller = new AbortController();
+    const document = {
+      body: { scrollHeight: 1500 },
+      documentElement: { scrollHeight: 1500 },
+    } as unknown as Document;
+    const windowLike = {
+      scrollY: 0,
+      scrollTo: vi.fn(() => controller.abort()),
+    } as unknown as Window & typeof globalThis;
+
+    const result = await autoScrollUntilStable({
+      document,
+      windowRef: windowLike,
+      pageCountProvider: () => 1,
+      scrollStep: 600,
+      maxScrolls: 10,
+      stabilizationWindow: 10,
+      signal: controller.signal,
+    });
+
+    expect(result).toBe(1);
+    expect(windowLike.scrollTo).toHaveBeenCalledTimes(1);
+  });
 });

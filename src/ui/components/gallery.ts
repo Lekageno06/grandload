@@ -11,13 +11,19 @@ export type GalleryItem = {
   selected?: boolean;
   provenance?: string;
   badge?: string;
+  likelyThumbnail?: boolean;
+  duplicateCount?: number;
 };
 
 export type GalleryFilterState = {
   search: string;
   provenance: string;
-  sort: 'page' | 'name' | 'width' | 'height';
+  sort: 'page' | 'name' | 'width' | 'height' | 'surface' | 'type';
   descending: boolean;
+  minWidth?: number;
+  minHeight?: number;
+  hideLikelyThumbnails?: boolean;
+  hideDuplicates?: boolean;
 };
 
 export function getVirtualWindow(
@@ -39,7 +45,11 @@ function filteredItems(
   const result = items.filter(
     (item) =>
       (!query || `${item.label} ${item.url}`.toLowerCase().includes(query)) &&
-      (!state.provenance || item.provenance === state.provenance),
+      (!state.provenance || item.provenance === state.provenance) &&
+      (!state.minWidth || (item.width ?? 0) >= state.minWidth) &&
+      (!state.minHeight || (item.height ?? 0) >= state.minHeight) &&
+      (!state.hideLikelyThumbnails || !item.likelyThumbnail) &&
+      (!state.hideDuplicates || (item.duplicateCount ?? 1) <= 1),
   );
   if (ordered) return result;
   return result.sort((left, right) => {
@@ -50,6 +60,10 @@ function filteredItems(
           ? (left.width ?? 0) - (right.width ?? 0)
           : state.sort === 'height'
             ? (left.height ?? 0) - (right.height ?? 0)
+            : state.sort === 'surface'
+              ? (left.width ?? 0) * (left.height ?? 0) - (right.width ?? 0) * (right.height ?? 0)
+              : state.sort === 'type'
+                ? left.ext.localeCompare(right.ext)
             : Number(left.id) - Number(right.id);
     return state.descending ? -values : values;
   });
@@ -174,6 +188,9 @@ export class ImageGallery {
         ? h('span', { className: 'ui-badge ui-badge--neutral' }, `Provenance : ${item.provenance}`)
         : null,
       item.badge ? h('span', { className: 'ui-badge ui-badge--warning' }, item.badge) : null,
+      item.duplicateCount && item.duplicateCount > 1
+        ? h('span', { className: 'ui-badge ui-badge--neutral' }, `${item.duplicateCount} doublons`)
+        : null,
     );
     card.append(check, image, body);
     return card;
@@ -258,7 +275,14 @@ export class ImageToolbar {
       h('option', { value: 'name' }, 'Nom'),
       h('option', { value: 'width' }, 'Largeur'),
       h('option', { value: 'height' }, 'Hauteur'),
+      h('option', { value: 'surface' }, 'Surface'),
+      h('option', { value: 'type' }, 'Type'),
     );
+    const minWidth = h('input', { className: 'ui-input', type: 'number', min: '0', placeholder: 'Largeur min', 'aria-label': 'Largeur minimale' });
+    const minHeight = h('input', { className: 'ui-input', type: 'number', min: '0', placeholder: 'Hauteur min', 'aria-label': 'Hauteur minimale' });
+    const hideThumbnails = h('input', { type: 'checkbox', 'aria-label': 'Masquer les miniatures probables' });
+    const hideDuplicates = h('input', { type: 'checkbox', 'aria-label': 'Masquer les doublons' });
+    const descending = h('input', { type: 'checkbox', 'aria-label': 'Tri décroissant' });
     const size = h('input', {
       type: 'range',
       min: '120',
@@ -271,10 +295,20 @@ export class ImageToolbar {
         search: search.value,
         provenance: provenance.value,
         sort: sort.value as GalleryFilterState['sort'],
+        descending: descending.checked,
+        minWidth: Number(minWidth.value) || 0,
+        minHeight: Number(minHeight.value) || 0,
+        hideLikelyThumbnails: hideThumbnails.checked,
+        hideDuplicates: hideDuplicates.checked,
       });
     search.addEventListener('input', update);
     provenance.addEventListener('change', update);
     sort.addEventListener('change', update);
+    minWidth.addEventListener('input', update);
+    minHeight.addEventListener('input', update);
+    hideThumbnails.addEventListener('change', update);
+    hideDuplicates.addEventListener('change', update);
+    descending.addEventListener('change', update);
     size.addEventListener('input', () =>
       document.documentElement.style.setProperty('--gallery-min', `${size.value}px`),
     );
@@ -284,6 +318,11 @@ export class ImageToolbar {
       h('label', { className: 'ui-field' }, h('span', {}, 'Recherche'), search),
       h('label', { className: 'ui-field' }, h('span', {}, 'Provenance'), provenance),
       h('label', { className: 'ui-field' }, h('span', {}, 'Tri'), sort),
+      h('label', { className: 'ui-field' }, h('span', {}, 'Dimensions'), minWidth),
+      h('label', { className: 'ui-field' }, h('span', {}, ' '), minHeight),
+      h('label', { className: 'ui-field' }, hideThumbnails, h('span', {}, 'Masquer miniatures')),
+      h('label', { className: 'ui-field' }, hideDuplicates, h('span', {}, 'Masquer doublons')),
+      h('label', { className: 'ui-field' }, descending, h('span', {}, 'Décroissant')),
       h('label', { className: 'ui-field ui-image-toolbar__size' }, h('span', {}, 'Taille'), size),
     );
   }

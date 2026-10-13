@@ -58,6 +58,18 @@ function readStyleUrls(node: Element): string[] {
   return Array.from(matches);
 }
 
+function readComputedBackgroundUrls(node: Element): string[] {
+  const view = node.ownerDocument?.defaultView;
+  if (!view) return [];
+  const style = view.getComputedStyle(node);
+  if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return [];
+  return readStyleUrls({ getAttribute: () => style.backgroundImage } as unknown as Element);
+}
+
+function readSvgReference(node: Element): string | null {
+  return node.getAttribute('href') ?? node.getAttribute('xlink:href');
+}
+
 export function readPageAssets(doc: Document, pageUrl: string): ScanItem[] {
   const items = new Map<string, ScanItem>();
 
@@ -74,11 +86,12 @@ export function readPageAssets(doc: Document, pageUrl: string): ScanItem[] {
     doc.querySelectorAll('img[src], img[data-src], img[data-original], img[data-lazy-src]'),
   )) {
     const candidates = [
+      img.getAttribute('srcset') ? getBestSrcsetCandidate(img.getAttribute('srcset') ?? '') : null,
       img.getAttribute('src'),
       img.getAttribute('data-src'),
       img.getAttribute('data-original'),
       img.getAttribute('data-lazy-src'),
-      img.getAttribute('srcset') ? getBestSrcsetCandidate(img.getAttribute('srcset') ?? '') : null,
+      img.getAttribute('data-srcset') ? getBestSrcsetCandidate(img.getAttribute('data-srcset') ?? '') : null,
     ];
 
     for (const candidate of candidates) {
@@ -108,7 +121,7 @@ export function readPageAssets(doc: Document, pageUrl: string): ScanItem[] {
     const best = rawSrcset.includes(',') ? getBestSrcsetCandidate(rawSrcset) : rawSrcset;
 
     if (best) {
-      addCandidate(items, best, 'source', pageUrl, getBaseNameFromUrl(best));
+      addCandidate(items, best, 'picture', pageUrl, getBaseNameFromUrl(best), getImageProvenance(source));
     }
   }
 
@@ -127,16 +140,30 @@ export function readPageAssets(doc: Document, pageUrl: string): ScanItem[] {
     }
   }
 
+  for (const video of Array.from(doc.querySelectorAll('video[poster]'))) {
+    const poster = video.getAttribute('poster');
+    if (poster) {
+      addCandidate(items, poster, 'poster', pageUrl, getBaseNameFromUrl(poster), getImageProvenance(video));
+    }
+  }
+
   for (const link of Array.from(doc.querySelectorAll('link[href]'))) {
     const href = link.getAttribute('href');
     if (href) {
       addCandidate(
         items,
         href,
-        'link',
+        /(?:^|\s)icon(?:\s|$)/iu.test(link.getAttribute('rel') ?? '') ? 'icon' : 'link',
         pageUrl,
         link.getAttribute('rel') || getBaseNameFromUrl(href),
       );
+    }
+  }
+
+  for (const reference of Array.from(doc.querySelectorAll('svg use[href], svg use[xlink\\:href]'))) {
+    const href = readSvgReference(reference);
+    if (href && !href.startsWith('#')) {
+      addCandidate(items, href, 'svg', pageUrl, getBaseNameFromUrl(href), getImageProvenance(reference));
     }
   }
 
@@ -161,6 +188,12 @@ export function readPageAssets(doc: Document, pageUrl: string): ScanItem[] {
   for (const node of Array.from(doc.querySelectorAll('[style]'))) {
     for (const styleUrl of readStyleUrls(node)) {
       addCandidate(items, styleUrl, 'style', pageUrl, 'Background image');
+    }
+  }
+
+  for (const node of Array.from(doc.querySelectorAll('*'))) {
+    for (const backgroundUrl of readComputedBackgroundUrls(node)) {
+      addCandidate(items, backgroundUrl, 'style', pageUrl, 'Background image', getImageProvenance(node));
     }
   }
 
