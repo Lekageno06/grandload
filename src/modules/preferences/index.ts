@@ -106,6 +106,43 @@ const preferencesModule: GrandloadModule = {
     folderRow.append(folderLabel, folderInput, folderError);
     panel.appendChild(folderRow);
 
+    const destinationModeLabel = document.createElement('label');
+    destinationModeLabel.className = 'd-grid gap-1';
+    destinationModeLabel.textContent = 'Mode de destination';
+    const destinationMode = document.createElement('select');
+    destinationMode.className = 'form-select form-select-sm';
+    for (const option of [
+      { value: 'browser', label: 'Dossier du navigateur' },
+      { value: 'custom-folder', label: 'Dossier personnalisé' },
+      { value: 'ask-each-time', label: 'Demander à chaque fois' },
+    ]) {
+      const element = document.createElement('option');
+      element.value = option.value;
+      element.textContent = option.label;
+      destinationMode.appendChild(element);
+    }
+    panel.appendChild(destinationModeLabel);
+    destinationModeLabel.appendChild(destinationMode);
+
+    const templateRow = document.createElement('label');
+    templateRow.className = 'd-grid gap-1';
+    templateRow.textContent = 'Gabarit de sous-dossier';
+    const templateInput = document.createElement('input');
+    templateInput.type = 'text';
+    templateInput.className = 'form-control form-control-sm';
+    templateInput.placeholder = 'Grandload/{serie}/{chapitre}';
+    templateRow.appendChild(templateInput);
+    panel.appendChild(templateRow);
+
+    const customFolderRow = document.createElement('label');
+    customFolderRow.className = 'd-grid gap-1';
+    customFolderRow.textContent = 'Nom du dossier personnalisé';
+    const customFolderInput = document.createElement('input');
+    customFolderInput.type = 'text';
+    customFolderInput.className = 'form-control form-control-sm';
+    customFolderRow.appendChild(customFolderInput);
+    panel.appendChild(customFolderRow);
+
     // 5. Stratégie d'acquisition (RG-205, Point 3)
     const strategyRow = document.createElement('div');
     strategyRow.className = 'd-grid gap-1';
@@ -170,6 +207,9 @@ const preferencesModule: GrandloadModule = {
       concurrencyInput.value = String(prefs.concurrency || 1);
       delayInput.value = String(prefs.requestDelayMs || 1500);
       folderInput.value = prefs.downloadFolder || 'Grandload';
+      destinationMode.value = prefs.destination.mode;
+      templateInput.value = prefs.destination.subfolderTemplate;
+      customFolderInput.value = prefs.destination.customFolderName;
       strategySelect.value = prefs.acquisitionStrategy || 'auto';
       autoExcludeInput.checked = prefs.autoExclude ?? true;
 
@@ -225,6 +265,20 @@ const preferencesModule: GrandloadModule = {
         const format = (formatSelect.value as 'cbz' | 'zip' | 'folder') || 'cbz';
         const acquisitionStrategy = (strategySelect.value as 'auto' | 'live-dom' | 'html-parse') || 'auto';
         const autoExclude = autoExcludeInput.checked;
+        const destinationTemplate = templateInput.value.trim();
+        const { validateDestinationTemplate } = await import('../../destinations/template');
+        const templateValidation = validateDestinationTemplate(destinationTemplate);
+        if (!templateValidation.valid) {
+          folderError.textContent = templateValidation.error ?? 'Gabarit de destination invalide.';
+          folderError.hidden = false;
+          templateInput.focus();
+          return;
+        }
+        const destination = {
+          mode: destinationMode.value as 'browser' | 'custom-folder' | 'ask-each-time',
+          subfolderTemplate: destinationTemplate,
+          customFolderName: customFolderInput.value.trim(),
+        };
 
         const modulesEnabled: Record<string, boolean> = {};
         for (const [id, input] of Object.entries(moduleToggles)) {
@@ -240,6 +294,7 @@ const preferencesModule: GrandloadModule = {
           acquisitionStrategy,
           autoExclude,
           modulesEnabled,
+          destination,
         });
 
         saveButton.textContent = 'Préférences enregistrées !';

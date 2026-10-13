@@ -35,6 +35,7 @@ type ChromeStorageMock = {
 };
 
 describe('storage', () => {
+  let storageStore: Map<string, unknown>;
   it('migre et purge les anciens jobs avant lecture', () => {
     const result = migrateJobsRecord(
       {
@@ -61,8 +62,18 @@ describe('storage', () => {
     expect((await getPrefs()).theme).toBe('dark');
   });
 
+  it('migre l’ancien sous-dossier vers le gabarit de destination', async () => {
+    storageStore.set('prefs', { downloadFolder: 'Mangas/{serie}' });
+    const prefs = await getPrefs();
+    expect(prefs.destination).toEqual({
+      mode: 'browser',
+      subfolderTemplate: 'Mangas/{serie}',
+      customFolderName: '',
+    });
+  });
+
   beforeEach(() => {
-    const store = new Map<string, unknown>();
+    storageStore = new Map<string, unknown>();
     const chromeMock: ChromeStorageMock = {
       storage: {
         local: {
@@ -75,8 +86,8 @@ describe('storage', () => {
             const result: Record<string, unknown> = {};
 
             for (const item of keys) {
-              if (store.has(item)) {
-                result[item] = store.get(item);
+              if (storageStore.has(item)) {
+                result[item] = storageStore.get(item);
               }
             }
 
@@ -84,7 +95,7 @@ describe('storage', () => {
           },
           set: (items, callback) => {
             for (const [key, value] of Object.entries(items)) {
-              store.set(key, value);
+              storageStore.set(key, value);
             }
 
             callback?.();
@@ -100,8 +111,8 @@ describe('storage', () => {
             const result: Record<string, unknown> = {};
 
             for (const item of keys) {
-              if (store.has(item)) {
-                result[item] = store.get(item);
+              if (storageStore.has(item)) {
+                result[item] = storageStore.get(item);
               }
             }
 
@@ -109,7 +120,7 @@ describe('storage', () => {
           },
           set: (items, callback) => {
             for (const [key, value] of Object.entries(items)) {
-              store.set(key, value);
+              storageStore.set(key, value);
             }
 
             callback?.();

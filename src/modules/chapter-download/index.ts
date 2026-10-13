@@ -552,6 +552,7 @@ const chapterDownloadModule: GrandloadModule = {
             meta,
             options: {
               downloadFolder: prefs.downloadFolder,
+              destinationTemplate: prefs.destination.subfolderTemplate,
               archiveName: archiveNameInput.value,
             },
           },

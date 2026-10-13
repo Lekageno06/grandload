@@ -495,6 +495,7 @@ const seriesDownloadModule: GrandloadModule = {
             packagerId: formatSelect.value,
             requestDelayMs: prefs.requestDelayMs,
             downloadFolder: prefs.downloadFolder,
+            destinationTemplate: prefs.destination.subfolderTemplate,
             chapters: selected.map(
               ({ selected: _selected, downloaded: _downloaded, ...chapter }) => chapter,
             ),

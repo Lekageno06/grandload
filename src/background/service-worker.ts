@@ -4,6 +4,9 @@ import { sanitizeFileName, getBaseNameFromUrl } from '../shared/url-utils';
 import { listAdapters } from '../core/registry';
 import type { PageContext } from '../core/types';
 import { suggestRequestedDownloadName } from './download-filenames';
+import { getPrefs } from '../core/storage';
+import '../destinations/browser';
+import { destinationTemplateValues, expandDestinationTemplate } from '../destinations/template';
 import {
   createChapterJob,
   handleArchiveProgress,
@@ -26,7 +29,9 @@ function createJobId(kind: string): string {
   return `${kind}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-function scheduleDownloads(items: DownloadItem[], domain: string): void {
+async function scheduleDownloads(items: DownloadItem[], _domain: string): Promise<void> {
+  const prefs = await getPrefs();
+  const template = prefs.destination.subfolderTemplate;
   const queue = [...items];
   let inFlight = 0;
 
@@ -38,7 +43,12 @@ function scheduleDownloads(items: DownloadItem[], domain: string): void {
       }
 
       inFlight += 1;
-      const filename = `Grandload/${domain}/${sanitizeFileName(item.label || getBaseNameFromUrl(item.url) || 'download')}`;
+      const subfolder = expandDestinationTemplate(template, destinationTemplateValues({
+        title: item.label || getBaseNameFromUrl(item.url) || 'download',
+        sourceUrl: item.url,
+      }));
+      const name = sanitizeFileName(item.label || getBaseNameFromUrl(item.url) || 'download');
+      const filename = subfolder ? `${subfolder}/${name}` : name;
 
       const attemptDownload = (attempt: number): void => {
         chrome.downloads.download(
@@ -202,7 +212,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       })();
 
       const jobId = createJobId(payload.kind);
-      scheduleDownloads(items, domain);
+      void scheduleDownloads(items, domain).catch((error: unknown) => {
+        console.error('Impossible de planifier les liens.', error);
+      });
       sendResponse({ ok: true, data: { jobId } });
       return true;
     }

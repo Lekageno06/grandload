@@ -13,6 +13,7 @@ import {
 import type { ChapterRef, Job, PageRef } from '../core/types';
 import type { MessagePayloadMap, MessageResponse } from '../core/messaging';
 import { sanitizeDownloadFolder, validateDownloadFolder } from '../shared/url-utils';
+import { validateDestinationTemplate } from '../destinations/template';
 import {
   cancelChapterJob,
   isTerminal,
@@ -29,6 +30,7 @@ export type SeriesJobParams = {
   packagerId: 'cbz' | 'zip' | 'folder';
   requestDelayMs: number;
   downloadFolder: string;
+  destinationTemplate?: string;
   chapters: ChapterRef[];
   currentChildId?: string;
   currentTabId?: number;
@@ -51,6 +53,7 @@ type SeriesChapterParams = {
   options?: Record<string, unknown>;
   requestDelayMs: number;
   downloadFolder: string;
+  destinationTemplate?: string;
 };
 
 type HistoryEntry = { number: number; label: string; url: string; completedAt: number };
@@ -117,6 +120,15 @@ function seriesParams(value: Record<string, unknown>): SeriesJobParams {
   if (!folderValidation.valid) {
     throw new GrandloadError('INVALID_URL', folderValidation.error ?? 'Dossier de destination invalide.');
   }
+  if (value.destinationTemplate !== undefined && typeof value.destinationTemplate !== 'string') {
+    throw new GrandloadError('INVALID_URL', 'Le gabarit de destination est invalide.');
+  }
+  if (typeof value.destinationTemplate === 'string') {
+    const templateValidation = validateDestinationTemplate(value.destinationTemplate);
+    if (!templateValidation.valid) {
+      throw new GrandloadError('INVALID_URL', templateValidation.error ?? 'Gabarit invalide.');
+    }
+  }
 
   return {
     seriesId: value.seriesId,
@@ -129,6 +141,9 @@ function seriesParams(value: Record<string, unknown>): SeriesJobParams {
         ? value.requestDelayMs
         : 1500,
     downloadFolder: sanitizeDownloadFolder(downloadFolder),
+    ...(typeof value.destinationTemplate === 'string'
+      ? { destinationTemplate: value.destinationTemplate }
+      : {}),
     chapters: [...chapters].sort((left, right) => left.number - right.number),
   };
 }
@@ -154,6 +169,7 @@ export async function createSeriesJob(
       chapter,
       requestDelayMs: params.requestDelayMs,
       downloadFolder: params.downloadFolder,
+      ...(params.destinationTemplate ? { destinationTemplate: params.destinationTemplate } : {}),
       options: {},
     } satisfies SeriesChapterParams,
     progress: { done: 0, total: 0 },
@@ -702,7 +718,12 @@ async function processSeriesChild(parentId: string, childId: string): Promise<vo
       pages: extractedPages,
       packagerId: seriesParams.packagerId,
       meta: createArchiveMeta(parent, chapter),
-      options: { downloadFolder: seriesParams.downloadFolder },
+      options: {
+        downloadFolder: seriesParams.downloadFolder,
+        ...(seriesParams.destinationTemplate
+          ? { destinationTemplate: seriesParams.destinationTemplate }
+          : {}),
+      },
     };
     await updateJob(childId, (current) => ({
       ...current,

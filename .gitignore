@@ -1,11 +1,13 @@
 node_modules/
 dist/
+Mangas/
+Liens et médias/
+Grandload/
+*.cbz
 *.zip
+dist-preview/
+release/
 .DS_Store
 coverage/
 .vite/
 *.tsbuildinfo
-Grandload/
-dist-preview/
-release/
-release/

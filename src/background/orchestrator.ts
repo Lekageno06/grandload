@@ -9,6 +9,7 @@ import type { ArchiveBuildResult, ArchiveMeta, Job, JobState, PageRef } from '..
 import type { MessagePayloadMap, MessageResponse } from '../core/messaging';
 import { sanitizeDownloadFolder, sanitizeFileName, validateDownloadFolder } from '../shared/url-utils';
 import { getPackagerMetadata } from '../packagers/metadata';
+import { destinationTemplateValues, expandDestinationTemplate, validateDestinationTemplate } from '../destinations/template';
 
 export type ChapterJobParams = {
   pages: PageRef[];
@@ -150,22 +151,33 @@ export function buildChapterDownloadFilename(
   extension: string,
   downloadFolder = 'Grandload',
   archiveName?: string,
+  destinationTemplate?: string,
 ): string {
   const folderValidation = validateDownloadFolder(downloadFolder);
   if (!folderValidation.valid) {
     throw new GrandloadError('INVALID_URL', folderValidation.error ?? 'Dossier de destination invalide.');
   }
-  const sanitizedFolder = sanitizeDownloadFolder(downloadFolder);
-  const root = sanitizedFolder === 'Grandload' ? 'Grandload' : `Grandload/${sanitizedFolder}`;
+  const sanitizedFolder = destinationTemplate === undefined
+    ? sanitizeDownloadFolder(downloadFolder)
+    : expandDestinationTemplate(destinationTemplate, destinationTemplateValues({
+      series: meta.series,
+      chapter: meta.chapter.label,
+      sourceUrl: meta.sourceUrl,
+      title: archiveName ?? meta.chapter.label,
+    }));
+  const root = destinationTemplate === undefined
+    ? (sanitizedFolder === 'Grandload' ? 'Grandload' : `Grandload/${sanitizedFolder}`)
+    : sanitizedFolder;
+  const destinationRoot = root ? `${root}/` : '';
   if (archiveName) {
-    return `${root}/${sanitizeFileName(meta.series, 'Serie')}/${sanitizeFileName(archiveName)}${extension}`;
+    return `${destinationRoot}${sanitizeFileName(meta.series, 'Serie')}/${sanitizeFileName(archiveName)}${extension}`;
   }
   const series = sanitizeFileName(meta.series, 'Série');
   const chapterNumber = meta.chapter.number;
   const whole = String(Math.trunc(chapterNumber)).padStart(3, '0');
   const fraction = String(chapterNumber).split('.')[1];
   const number = fraction ? `${whole}.${fraction}` : whole;
-  return `${root}/${series}/${series} - Chapitre ${number}${extension}`;
+  return `${destinationRoot}${series}/${series} - Chapitre ${number}${extension}`;
 }
 
 function parseChapterParams(value: Record<string, unknown>): ChapterJobParams {
@@ -201,6 +213,16 @@ function parseChapterParams(value: Record<string, unknown>): ChapterJobParams {
   const folderValidation = validateDownloadFolder(downloadFolder);
   if (!folderValidation.valid) {
     throw new GrandloadError('INVALID_URL', folderValidation.error ?? 'Dossier de destination invalide.');
+  }
+  const destinationTemplateValue = options.destinationTemplate;
+  if (destinationTemplateValue !== undefined && typeof destinationTemplateValue !== 'string') {
+    throw new GrandloadError('INVALID_URL', 'Le gabarit de destination est invalide.');
+  }
+  if (typeof destinationTemplateValue === 'string') {
+    const templateValidation = validateDestinationTemplate(destinationTemplateValue);
+    if (!templateValidation.valid) {
+      throw new GrandloadError('INVALID_URL', templateValidation.error ?? 'Gabarit invalide.');
+    }
   }
 
   return {
@@ -277,23 +299,34 @@ function artifactDownloads(
   extension: string,
   downloadFolder: string,
   archiveName?: string,
+  destinationTemplate?: string,
 ): Array<{ blobUrl: string; filename: string }> {
   if (result.kind === 'archive') {
     return [{
       blobUrl: result.blobUrl,
-      filename: buildChapterDownloadFilename(meta, extension, downloadFolder, archiveName),
+      filename: buildChapterDownloadFilename(meta, extension, downloadFolder, archiveName, destinationTemplate),
     }];
   }
 
-  const sanitizedFolder = sanitizeDownloadFolder(downloadFolder);
-  const root = sanitizedFolder === 'Grandload' ? 'Grandload' : `Grandload/${sanitizedFolder}`;
+  const sanitizedFolder = destinationTemplate === undefined
+    ? sanitizeDownloadFolder(downloadFolder)
+    : expandDestinationTemplate(destinationTemplate, destinationTemplateValues({
+      series: meta.series,
+      chapter: meta.chapter.label,
+      sourceUrl: meta.sourceUrl,
+      title: archiveName ?? meta.chapter.label,
+    }));
+  const root = destinationTemplate === undefined
+    ? (sanitizedFolder === 'Grandload' ? 'Grandload' : `Grandload/${sanitizedFolder}`)
+    : sanitizedFolder;
+  const destinationRoot = root ? `${root}/` : '';
   const series = sanitizeFileName(meta.series, 'Série');
   const archiveDirectory = archiveName
     ? sanitizeFileName(archiveName, series)
     : `Chapitre ${String(meta.chapter.number)}`;
   return result.files.map((file) => ({
     blobUrl: file.blobUrl,
-    filename: `${root}/${series}/${archiveDirectory}/${file.name}`,
+    filename: `${destinationRoot}${series}/${archiveDirectory}/${file.name}`,
   }));
 }
 
@@ -472,12 +505,15 @@ export async function runChapterJob(jobId: string): Promise<void> {
     const downloadFolder = typeof folderValue === 'string' ? folderValue : 'Grandload';
     const archiveNameValue = params.options.archiveName;
     const archiveName = typeof archiveNameValue === 'string' ? archiveNameValue : undefined;
+    const destinationTemplateValue = params.options.destinationTemplate;
+    const destinationTemplate = typeof destinationTemplateValue === 'string' ? destinationTemplateValue : undefined;
     for (const artifact of artifactDownloads(
       result,
       params.meta,
       packager.extension,
       downloadFolder,
       archiveName,
+      destinationTemplate,
     )) {
       const current = (await getJobs())[jobId];
       if (!current || current.state === 'cancelled') {

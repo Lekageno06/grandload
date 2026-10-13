@@ -1,5 +1,6 @@
 import type { Job } from './types';
 import { GrandloadError } from './errors';
+import type { DestinationSettings } from '../destinations/types';
 
 export type StorageAreaName = 'local' | 'session';
 
@@ -8,6 +9,7 @@ export type ThemePreference = 'auto' | 'light' | 'dark';
 
 export interface Prefs {
   theme: ThemePreference;
+  destination: DestinationSettings;
   format: 'zip' | 'cbz' | 'folder';
   concurrency: number;
   requestDelayMs: number;
@@ -110,6 +112,7 @@ export const STORAGE_KEYS = {
 
 export const DEFAULT_PREFS: Prefs = {
   theme: 'dark',
+  destination: { mode: 'browser', subfolderTemplate: 'Grandload', customFolderName: '' },
   format: 'cbz',
   concurrency: 1,
   requestDelayMs: 1500,
@@ -200,6 +203,13 @@ export async function writeStorage<T>(
 export async function getPrefs(): Promise<Prefs> {
   const stored = (await readStorage<Partial<Prefs>>('local', STORAGE_KEYS.prefs)) ?? {};
 
+  const destination: DestinationSettings = {
+    ...DEFAULT_PREFS.destination,
+    ...(stored.destination ?? {}),
+    ...(stored.destination === undefined && typeof stored.downloadFolder === 'string'
+      ? { subfolderTemplate: stored.downloadFolder }
+      : {}),
+  };
   return {
     ...DEFAULT_PREFS,
     ...stored,
@@ -207,6 +217,7 @@ export async function getPrefs(): Promise<Prefs> {
       ...DEFAULT_PREFS.modulesEnabled,
       ...(stored.modulesEnabled ?? {}),
     },
+    destination,
   };
 }
 
