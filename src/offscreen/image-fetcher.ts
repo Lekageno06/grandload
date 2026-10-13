@@ -16,7 +16,7 @@ export type ImageFetchOptions = {
 };
 
 const MAX_CONCURRENCY = 3;
-const RETRY_DELAYS_MS = [1000, 3000];
+const RETRY_DELAYS_MS = [1000, 3000, 6000];
 const REQUEST_TIMEOUT_MS = 30_000;
 const EXTENSION_BY_MIME: Record<string, string> = {
   'image/avif': 'avif',
@@ -44,6 +44,18 @@ function extensionFor(page: PageRef, contentType: string): string {
   return EXTENSION_BY_MIME[mime] ?? 'img';
 }
 
+function remoteFailureMessage(url: string, status: number, contentType: string): string {
+  const type = contentType || 'absent';
+  if (status === 403 || status === 429 || status === 503 || type.includes('text/html')) {
+    return `Le site a refusé ou ralenti les téléchargements (HTTP ${status}) : réessaie plus tard ou augmente le délai dans les préférences. Content-Type : ${type}. URL : ${url}`;
+  }
+  return `Échec HTTP ${status} pour ${url}. Content-Type : ${type}`;
+}
+
+function isNetworkFailure(error: unknown): boolean {
+  return error instanceof TypeError || (error instanceof Error && /failed to fetch|network error|networkerror/iu.test(error.message));
+}
+
 async function fetchOne(
   page: PageRef,
   options: Required<Pick<ImageFetchOptions, 'fetcher' | 'sleep' | 'timeoutMs'>> & ImageFetchOptions,
@@ -63,17 +75,13 @@ async function fetchOne(
         credentials: 'include',
         signal: controller.signal,
       });
-      if (!response.ok) {
-        throw new GrandloadError('FETCH_FAILED', `Échec HTTP ${response.status} pour ${page.url}`);
-      }
-
       const contentType =
         response.headers.get('Content-Type')?.split(';', 1)[0]?.trim().toLowerCase() ?? '';
+      if (!response.ok) {
+        throw new GrandloadError('FETCH_FAILED', remoteFailureMessage(page.url, response.status, contentType));
+      }
       if (!contentType.startsWith('image/')) {
-        throw new GrandloadError(
-          'FETCH_FAILED',
-          `Type de contenu invalide pour ${page.url} : ${contentType || 'absent'}`,
-        );
+        throw new GrandloadError('FETCH_FAILED', remoteFailureMessage(page.url, response.status, contentType));
       }
 
       const data = new Uint8Array(await response.arrayBuffer());
@@ -90,6 +98,9 @@ async function fetchOne(
       if (attempt >= RETRY_DELAYS_MS.length) {
         if (error instanceof GrandloadError) {
           throw error;
+        }
+        if (isNetworkFailure(error)) {
+          throw new GrandloadError('FETCH_FAILED', `Connexion interrompue pendant le téléchargement de ${page.url}.`);
         }
         throw new GrandloadError(
           'FETCH_FAILED',
@@ -131,7 +142,7 @@ export async function fetchImages(
   }
   const workerOptions = { ...fetchOptions, signal: controller.signal };
 
-  const worker = async (): Promise<void> => {
+  const worker = async (workerId: number): Promise<void> => {
     while (true) {
       if (controller.signal.aborted) {
         throw new GrandloadError('FETCH_FAILED', 'Téléchargement annulé.');
@@ -142,6 +153,7 @@ export async function fetchImages(
       if (index >= pages.length) {
         return;
       }
+      if (hasFailure && workerId > 0) return;
 
       const page = pages[index];
       if (!page) {
@@ -156,7 +168,6 @@ export async function fetchImages(
         if (!hasFailure) {
           hasFailure = true;
           firstFailure = error;
-          controller.abort(error);
         }
         throw error;
       }
@@ -164,7 +175,7 @@ export async function fetchImages(
   };
 
   try {
-    const workers = Array.from({ length: Math.min(MAX_CONCURRENCY, pages.length) }, () => worker());
+    const workers = Array.from({ length: Math.min(MAX_CONCURRENCY, pages.length) }, (_value, index) => worker(index));
     await Promise.allSettled(workers);
     if (hasFailure) {
       throw firstFailure;

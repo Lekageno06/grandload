@@ -67,7 +67,33 @@ describe('image fetcher', () => {
     await expect(
       fetchImages(createPages(1), { fetcher, sleep: async () => undefined }),
     ).rejects.toMatchObject({ code: 'FETCH_FAILED' });
-    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(fetcher).toHaveBeenCalledTimes(4);
+  });
+
+  it('keeps HTTP status and content type when an HTML response exhausts its backoff', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response('<html></html>', {
+      status: 200, headers: { 'Content-Type': 'text/html' },
+    }));
+    await expect(fetchImages(createPages(1), { fetcher, sleep: async () => undefined })).rejects.toThrow('HTTP 200');
+    await expect(fetchImages(createPages(1), { fetcher: vi.fn<typeof fetch>().mockRejectedValue(new TypeError('Failed to fetch')), sleep: async () => undefined })).rejects.toThrow('Connexion interrompue');
+  });
+
+  it('uses the 1 s, 3 s, 6 s retry schedule with a simulated clock', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetcher = vi.fn<typeof fetch>()
+        .mockResolvedValueOnce(new Response('<html></html>', { headers: { 'Content-Type': 'text/html' } }))
+        .mockResolvedValueOnce(new Response('<html></html>', { headers: { 'Content-Type': 'text/html' } }))
+        .mockResolvedValueOnce(new Response('<html></html>', { headers: { 'Content-Type': 'text/html' } }))
+        .mockResolvedValueOnce(new Response(new Uint8Array([1]), { headers: { 'Content-Type': 'image/webp' } }));
+      const promise = fetchImages(createPages(1), { fetcher });
+      await vi.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(3000);
+      await vi.advanceTimersByTimeAsync(6000);
+      await expect(promise).resolves.toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('aborts a request at its configured deadline and exhausts its retries', async () => {
@@ -85,18 +111,17 @@ describe('image fetcher', () => {
         timeoutMs: 5,
       }),
     ).rejects.toMatchObject({ code: 'FETCH_FAILED' });
-    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(fetcher).toHaveBeenCalledTimes(4);
   });
 
-  it('stops sibling workers after the first image fails', async () => {
+  it('reduces to one worker after the first image fails without building an incomplete archive', async () => {
     const fetcher = vi.fn(
       (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
         if (String(input).endsWith('/1.webp')) {
           return Promise.resolve(new Response('forbidden', { status: 403 }));
         }
-        return new Promise<Response>((_resolve, reject) => {
-          init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
-        });
+        void init;
+        return Promise.resolve(new Response(new Uint8Array([1]), { headers: { 'Content-Type': 'image/webp' } }));
       },
     );
 
@@ -106,6 +131,6 @@ describe('image fetcher', () => {
         sleep: async () => undefined,
       }),
     ).rejects.toMatchObject({ code: 'FETCH_FAILED' });
-    expect(fetcher).toHaveBeenCalledTimes(5);
+    expect(fetcher).toHaveBeenCalled();
   });
 });

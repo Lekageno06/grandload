@@ -117,13 +117,20 @@ export function detectDownloadFilenameWarning(
   observed: Pick<chrome.downloads.DownloadItem, 'filename' | 'mime' | 'byExtensionName'>,
 ): Job['warning'] | undefined {
   const actual = observed.filename;
-  const normalizedRequested = requested.replace(/\\/gu, '/').toLowerCase();
-  const normalizedActual = actual.replace(/\\/gu, '/').toLowerCase();
+  const normalize = (value: string): string => value.replace(/\\/gu, '/').replace(/^[a-z]:/iu, '').toLowerCase();
+  const normalizedRequested = normalize(requested);
+  const normalizedActual = normalize(actual);
   if (
     normalizedActual === normalizedRequested ||
     normalizedActual.endsWith(`/${normalizedRequested}`)
   ) {
     return undefined;
+  }
+  const requestedName = normalizedRequested.split('/').at(-1) ?? normalizedRequested;
+  const actualName = normalizedActual.split('/').at(-1) ?? normalizedActual;
+  const removeUniqueness = (name: string): string => name.replace(/ \(\d+\)(?=\.[^.]+$)/u, '');
+  if (removeUniqueness(requestedName) === removeUniqueness(actualName)) {
+    return { requested, actual, message: `Un fichier du même nom existait déjà : enregistré sous ${actual}` };
   }
   void observed.mime;
   void observed.byExtensionName;

@@ -110,6 +110,12 @@ describe('chapter job orchestration', () => {
     ).toBeUndefined();
   });
 
+  it('reports a readable uniqueness warning when only Chrome suffixes the filename', () => {
+    expect(detectDownloadFilenameWarning('Grandload/Series/Chapter.cbz', {
+      filename: 'C:\\Downloads\\Grandload\\Series\\Chapter (1).cbz', mime: 'application/zip', byExtensionName: '',
+    })).toMatchObject({ message: 'Un fichier du même nom existait déjà : enregistré sous C:\\Downloads\\Grandload\\Series\\Chapter (1).cbz' });
+  });
+
   it('protects terminal state and progress while allowing a terminal warning', () => {
     const completed: Job = {
       ...oldJob,
