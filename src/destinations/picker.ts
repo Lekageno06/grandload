@@ -38,6 +38,11 @@ export function createDestinationPicker(initial: DestinationSettings): {
   choose.type = 'button';
   choose.className = 'btn btn-outline-secondary btn-sm';
   choose.textContent = 'Choisir un dossier…';
+  const saveAsFallback = document.createElement('button');
+  saveAsFallback.type = 'button';
+  saveAsFallback.className = 'btn btn-link btn-sm text-start p-0';
+  saveAsFallback.textContent = 'Choisir le chemin de l’archive à chaque téléchargement';
+  saveAsFallback.hidden = true;
   const status = document.createElement('small');
   status.className = 'text-body-secondary';
   let userInteracted = false;
@@ -70,6 +75,7 @@ export function createDestinationPicker(initial: DestinationSettings): {
           status.textContent = previousHandle
             ? `Dossier : ${previousHandle.name} (sélection conservée)`
             : 'Sélection annulée. Aucun dossier personnalisé n’est enregistré.';
+          saveAsFallback.hidden = Boolean(previousHandle);
           return;
         }
         status.textContent = error instanceof Error ? error.message : 'Sélection impossible.';
@@ -78,7 +84,13 @@ export function createDestinationPicker(initial: DestinationSettings): {
         choose.disabled = !isCustomFolderAvailable();
       });
   });
-  element.append(legend, mode, template, choose, status);
+  saveAsFallback.addEventListener('click', () => {
+    userInteracted = true;
+    mode.value = 'ask-each-time';
+    saveAsFallback.hidden = true;
+    status.textContent = 'Le chemin sera demandé pour chaque archive.';
+  });
+  element.append(legend, mode, template, choose, status, saveAsFallback);
   return {
     element,
     getSettings: () => ({
