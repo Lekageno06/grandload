@@ -37,6 +37,65 @@ export interface RuntimeState {
   activeTabId?: number;
 }
 
+const JOB_STATES: readonly Job['state'][] = [
+  'queued',
+  'running',
+  'paused',
+  'done',
+  'failed',
+  'ignored',
+  'cancelled',
+];
+
+export function migrateJobsRecord(
+  input: Record<string, unknown>,
+  now = Date.now(),
+): { jobs: Record<string, Job>; migrated: number; purged: number } {
+  const jobs: Record<string, Job> = {};
+  let migrated = 0;
+  let purged = 0;
+
+  for (const [key, value] of Object.entries(input)) {
+    if (typeof value !== 'object' || value === null) {
+      purged += 1;
+      continue;
+    }
+    const candidate = value as Partial<Job>;
+    if (
+      typeof candidate.id !== 'string' ||
+      candidate.id !== key ||
+      (candidate.kind !== 'chapter' && candidate.kind !== 'series' && candidate.kind !== 'links') ||
+      !JOB_STATES.includes(candidate.state as Job['state']) ||
+      typeof candidate.params !== 'object' ||
+      candidate.params === null
+    ) {
+      purged += 1;
+      continue;
+    }
+    const progress = candidate.progress;
+    const normalizedProgress =
+      progress && Number.isFinite(progress.done) && Number.isFinite(progress.total)
+        ? { done: Math.max(0, progress.done), total: Math.max(0, progress.total) }
+        : { done: 0, total: 0 };
+    const normalized: Job = {
+      ...candidate,
+      progress: normalizedProgress,
+      createdAt: typeof candidate.createdAt === 'number' ? candidate.createdAt : now,
+    } as Job;
+    if (
+      normalized.createdAt !== candidate.createdAt ||
+      !progress ||
+      normalizedProgress.done !== progress.done ||
+      normalizedProgress.total !== progress.total
+    ) {
+      migrated += 1;
+    }
+    jobs[key] = normalized;
+  }
+
+  return { jobs, migrated, purged };
+}
+
 export const STORAGE_KEYS = {
   runtime: 'runtime',
   jobs: 'jobs',
@@ -175,9 +234,14 @@ function serializeJobs<T>(operation: () => Promise<T>): Promise<T> {
 }
 
 export function getJobs(): Promise<Record<string, Job>> {
-  return serializeJobs(
-    async () => (await readStorage<Record<string, Job>>('local', STORAGE_KEYS.jobs)) ?? {},
-  );
+  return serializeJobs(async () => {
+    const raw = (await readStorage<Record<string, unknown>>('local', STORAGE_KEYS.jobs)) ?? {};
+    const result = migrateJobsRecord(raw);
+    if (result.migrated > 0 || result.purged > 0) {
+      await writeStorage('local', STORAGE_KEYS.jobs, result.jobs);
+    }
+    return result.jobs;
+  });
 }
 
 export function setJobs(jobs: Record<string, Job>): Promise<void> {

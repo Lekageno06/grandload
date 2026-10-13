@@ -4,6 +4,7 @@ import {
   consumeRequestedDownloadName,
   DEFAULT_PREFS,
   getJobs,
+  migrateJobsRecord,
   getPrefs,
   readStorage,
   setJobs,
@@ -34,6 +35,27 @@ type ChromeStorageMock = {
 };
 
 describe('storage', () => {
+  it('migre et purge les anciens jobs avant lecture', () => {
+    const result = migrateJobsRecord(
+      {
+        valid: {
+          id: 'valid',
+          kind: 'chapter',
+          state: 'done',
+          params: {},
+          progress: { done: 2, total: 2 },
+        },
+        invalid: { id: 'invalid', state: 'obsolete' },
+      },
+      123,
+    );
+
+    expect(result.migrated).toBe(1);
+    expect(result.purged).toBe(1);
+    expect(result.jobs.valid?.createdAt).toBe(123);
+    expect(result.jobs.invalid).toBeUndefined();
+  });
+
   beforeEach(() => {
     const store = new Map<string, unknown>();
     const chromeMock: ChromeStorageMock = {

@@ -6,5 +6,6 @@ coverage/
 .vite/
 *.tsbuildinfo
 Grandload/
+dist-preview/
 release/
 release/

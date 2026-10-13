@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { genericAdapter } from '../src/adapters/generic';
 import { getChapterNumberFromUrl, mangasOriginesAdapter } from '../src/adapters/mangas-origines';
 import { autoScrollUntilStable } from '../src/content/scroll-loader';
+import { formatChapterSource } from '../src/modules/chapter-download';
 import { processPageExclusions } from '../src/modules/chapter-download/exclusions';
 
 function readMangasOriginesFixture(
@@ -16,6 +17,23 @@ function readMangasOriginesFixture(
 }
 
 describe('mangas-origines adapter', () => {
+  it('affiche la source sous forme d’hôte et chemin tronqué', () => {
+    expect(formatChapterSource('https://mangas-origines.fr/oeuvre/the-boxer/chapitre-119/')).toBe(
+      'mangas-origines.fr/oeuvre/the-boxer/chapitre-119/',
+    );
+    expect(formatChapterSource('https://example.test/a'.repeat(20), 20)).toMatch(/…$/u);
+  });
+
+  it('délègue la collecte au content reader et ne possède aucun collecteur DOM parallèle', () => {
+    const source = readFileSync(
+      fileURLToPath(new URL('../src/modules/chapter-download/index.ts', import.meta.url)),
+      'utf8',
+    );
+
+    expect(source).toContain("sendContentRequest<PageRef[]>(tabId, 'READ_CHAPTER_PAGES'");
+    expect(source).not.toContain('executeScript');
+    expect(source).not.toMatch(/querySelectorAll[^\n]*['"]img/iu);
+  });
   it('classifies series and chapter URLs including a decimal route', () => {
     const seriesUrl = new URL('https://mangas-origines.fr/oeuvre/one-piece/');
     const chapterUrl = new URL('https://mangas-origines.fr/oeuvre/one-piece/chapitre-129-5/');

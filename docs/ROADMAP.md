@@ -2,28 +2,28 @@
 
 ## Jalon 0 — Fondations
 
-- [ ] Dépôt GitHub, `.gitignore`, `AGENTS.md`, `docs/`
-- [ ] `package.json`, `tsconfig.json` (strict), `esbuild.config.mjs`, ESLint/Prettier, Vitest
-- [ ] `public/manifest.json`, `popup.html`, `offscreen.html`, Bootstrap local, icônes
-- [ ] Popup vide qui s'ouvre depuis `dist/`
+- [x] Dépôt GitHub, `.gitignore`, `AGENTS.md`, `docs/`
+- [x] `package.json`, `tsconfig.json` (strict), `esbuild.config.mjs`, ESLint/Prettier, Vitest
+- [x] `public/manifest.json`, `popup.html`, `offscreen.html`, Bootstrap local, icônes
+- [x] Popup vide qui s'ouvre depuis `dist/`
 
 ## Jalon 1 — Noyau
 
-- [ ] `core/types`, `messaging` (bus typé), `registry`, `storage`, `errors`, `logger`
-- [ ] `permissions` (demande par domaine)
-- [ ] `popup/main.ts` : monte les modules applicables (onglets)
+- [x] `core/types`, `messaging` (bus typé), `registry`, `storage`, `errors`, `logger`
+- [x] `permissions` (demande par domaine)
+- [x] `popup/main.ts` : monte les modules applicables (onglets)
 
 ## Jalon 2 — Module `generic-scan`
 
-- [ ] `content` : lecture du DOM (RG-03, 06) ; normalisation et classification (RG-10 à 21)
-- [ ] Filtres, sélection, badges (RG-23 à 27)
-- [ ] Téléchargement simple (RG-30 à 35) et exports (RG-40 à 42)
+- [x] `content` : lecture du DOM (RG-03, 06) ; normalisation et classification (RG-10 à 21)
+- [x] Filtres, sélection, badges (RG-23 à 27)
+- [x] Téléchargement simple (RG-30 à 35) et exports (RG-40 à 42)
 
 ## Jalon 3 — Adaptateurs et module `chapter-download`
 
-- [ ] Interface `SiteAdapter` + adaptateur générique + `mangas-origines` (sélecteurs confirmés dans DevTools, fixtures)
-- [ ] Lecture des planches + auto-scroll (RG-100 à 104)
-- [ ] Grille d'exclusion (RG-105, 109, 110)
+- [x] Interface `SiteAdapter` + adaptateur générique + `mangas-origines` (sélecteurs confirmés dans DevTools, fixtures)
+- [x] Lecture des planches + auto-scroll (RG-100 à 104)
+- [x] Grille d'exclusion (RG-105, 109, 110)
 
 ## Jalon 4 — Archives
 

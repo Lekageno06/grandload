@@ -9,7 +9,20 @@
   <body>
     <main class="panel-shell ui-app" aria-labelledby="app-title">
       <header class="panel-header">
-        <div class="panel-brand"><span class="panel-logo" aria-hidden="true">G</span><div><p class="panel-kicker">Grandload</p><h1 id="app-title">Grandload</h1><p id="page-domain" class="panel-domain">Page active</p></div></div>
+        <div class="panel-brand">
+          <span class="panel-logo" aria-hidden="true">G</span>
+          <div>
+            <h1 id="app-title">Grandload</h1>
+            <p id="page-domain" class="panel-domain">Page active</p>
+          </div>
+        </div>
+        <button
+          id="preferences-button"
+          class="ui-icon-button"
+          type="button"
+          aria-label="Préférences"
+          title="Préférences"
+        ></button>
         <span id="app-version" class="panel-version">v…</span>
       </header>
       <section id="status-region" class="panel-status" aria-live="polite">
@@ -21,7 +34,17 @@
         <summary><span>Tâches</span><span id="task-count" class="ui-badge">0</span></summary>
         <div id="job-list" class="job-list"><p class="ui-muted">Aucune tâche en cours.</p></div>
       </details>
-      <div class="panel-action-bar"><span id="panel-selection">Aucune sélection</span><button id="panel-primary-action" class="ui-button ui-button--primary" type="button" disabled>Télécharger</button></div>
+      <div class="panel-action-bar">
+        <span id="panel-selection">Aucune sélection</span
+        ><button
+          id="panel-primary-action"
+          class="ui-button ui-button--primary"
+          type="button"
+          disabled
+        >
+          Télécharger
+        </button>
+      </div>
     </main>
     <footer class="panel-footer"><small id="build-info"></small></footer>
     <script type="module" src="sidepanel.js"></script>

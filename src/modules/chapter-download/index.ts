@@ -5,6 +5,7 @@ import { getExclusions, getJobs, getPrefs, setExclusions, updateJobs } from '../
 import type { ExclusionMemory } from '../../core/storage';
 import type {
   ArchiveMeta,
+  ChapterMeta,
   GrandloadModule,
   Job,
   ModuleApi,
@@ -23,14 +24,14 @@ type SelectablePage = PageRef & {
 };
 type ChapterDomData = { pages: SelectablePage[]; seriesTitle: string; chapterLabel: string };
 
-function cleanWorkTitle(value: string): string {
-  return value
-    .replace(/\s+/gu, ' ')
-    .trim()
-    .replace(/^Lire\s+/iu, '')
-    .replace(/\s+(?:Scan\s+FR|Scan)\s*$/iu, '')
-    .replace(/\s*-\s*Mangas?\s+Origines\s*$/iu, '')
-    .trim();
+export function formatChapterSource(url: string, maxLength = 72): string {
+  try {
+    const parsed = new URL(url);
+    const source = `${parsed.hostname}${parsed.pathname}${parsed.search}`;
+    return source.length > maxLength ? `${source.slice(0, maxLength - 1)}…` : source;
+  } catch {
+    return 'Source indisponible';
+  }
 }
 
 export function getChapterSelectionCounts(items: readonly Pick<SelectablePage, 'selected'>[]): {
@@ -51,125 +52,55 @@ export function getExclusionBadgeText(item: {
   return null;
 }
 
+function sendContentRequest<T>(
+  tabId: number,
+  type: 'READ_CHAPTER_PAGES' | 'READ_CHAPTER_META',
+  adapterId: string,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    chrome.tabs.sendMessage(
+      tabId,
+      { type, payload: { adapterId } },
+      (response: { ok?: boolean; data?: T; error?: { message?: string } } | undefined) => {
+        const runtimeError = chrome.runtime.lastError;
+        if (runtimeError) {
+          reject(new Error(runtimeError.message ?? 'Lecture de la page impossible.'));
+          return;
+        }
+        if (response?.ok && response.data !== undefined) {
+          resolve(response.data);
+          return;
+        }
+        reject(new Error(response?.error?.message ?? 'Lecture du chapitre impossible.'));
+      },
+    );
+  });
+}
+
 function collectChapterImages(tabId: number, adapterId: string): Promise<ChapterDomData> {
   if (
     typeof chrome === 'undefined' ||
-    !chrome.scripting ||
-    typeof chrome.scripting.executeScript !== 'function'
+    !chrome.tabs ||
+    typeof chrome.tabs.sendMessage !== 'function'
   ) {
     return Promise.resolve({ pages: [], seriesTitle: 'Série', chapterLabel: '' });
   }
 
-  return new Promise<ChapterDomData>((resolve) => {
-    chrome.scripting.executeScript(
-      {
-        target: { tabId },
-        args: [adapterId],
-        func: (currentAdapterId: string) => {
-          const seen = new Set<string>();
-          const isMangasOrigines =
-            currentAdapterId === 'mangas-origines' ||
-            window.location.hostname.toLowerCase() === 'mangas-origines.fr';
-          const preciseSelector = 'main.ori-lec-scene .reading-content img.wp-manga-chapter-img';
-          const sceneSelector = 'main.ori-lec-scene img.wp-manga-chapter-img';
-          const classFallbackSelector = 'img.wp-manga-chapter-img';
-          let selector = preciseSelector;
-          let fallbackReason = '';
-          let images = isMangasOrigines
-            ? Array.from(document.querySelectorAll<HTMLImageElement>(preciseSelector))
-            : Array.from(document.querySelectorAll<HTMLImageElement>('img'));
-
-          if (isMangasOrigines && images.length === 0) {
-            images = Array.from(document.querySelectorAll<HTMLImageElement>(sceneSelector));
-            selector = sceneSelector;
-            fallbackReason = `aucune image avec le sélecteur ${preciseSelector}`;
-          }
-          if (isMangasOrigines && images.length === 0) {
-            images = Array.from(
-              document.querySelectorAll<HTMLImageElement>(classFallbackSelector),
-            ).filter(
-              (image) =>
-                !image.closest('header, footer, nav, .main-navigation_wrap, .wrap_branding'),
-            );
-            selector = classFallbackSelector;
-            fallbackReason = `aucune image dans ${sceneSelector}`;
-          }
-          console.info(
-            `[Grandload] Lecture chapitre: adaptateur=${isMangasOrigines ? 'mangas-origines' : currentAdapterId}; ` +
-              `sélecteur="${selector}"; résultats=${images.length}; ` +
-              `repli=${fallbackReason ? `oui (${fallbackReason})` : 'non'}`,
-          );
-          let pageNumber = 0;
-
-          const pages = images
-            .filter((image) =>
-              isMangasOrigines
-                ? !image.closest('header, footer, nav, .main-navigation_wrap, .wrap_branding')
-                : !image.closest('header, footer, nav, aside, .logo, .avatar, .social'),
-            )
-            .flatMap((image, index) => {
-              const sources = [
-                image.getAttribute('src'),
-                image.getAttribute('data-src'),
-                image.getAttribute('data-lazy-src'),
-                image.getAttribute('data-original'),
-                image.getAttribute('data-srcset'),
-                image.getAttribute('srcset'),
-              ].filter((value): value is string => Boolean(value?.trim()));
-
-              const rawUrl = sources[0]?.split(',')[0]?.trim() ?? '';
-              if (!rawUrl) {
-                return [];
-              }
-
-              let cleanedUrl: string;
-              try {
-                cleanedUrl = new URL(rawUrl, window.location.href).toString();
-              } catch {
-                return [];
-              }
-              if (seen.has(cleanedUrl)) {
-                return [];
-              }
-              seen.add(cleanedUrl);
-              pageNumber += 1;
-              const base = cleanedUrl.split('/').filter(Boolean).pop() || `Page ${index + 1}`;
-              const pathname = new URL(cleanedUrl).pathname;
-              const extension = pathname.match(/\.([a-z0-9]+)$/iu)?.[1]?.toLowerCase() ?? '';
-              return {
-                id: `${index + 1}-${cleanedUrl}`,
-                label: base.length > 30 ? `${base.slice(0, 27)}…` : base,
-                index: pageNumber,
-                url: cleanedUrl,
-                ext: extension,
-                width: image.naturalWidth || undefined,
-                height: image.naturalHeight || undefined,
-                selected: true,
-              };
-            })
-            .map((item) => item as SelectablePage);
-
-          const seriesTitle =
-            document.querySelector('.ori-lec-titre')?.textContent?.trim() ||
-            cleanWorkTitle(
-              document.querySelector('meta[property="og:title"]')?.getAttribute('content') ||
-                document.title,
-            ) ||
-            'Série';
-          const chapterMatch = window.location.pathname.match(/\/chapitre-(\d+)(?:-(\d+))?\/?$/iu);
-          const chapterNumber = chapterMatch?.[1]
-            ? Number(chapterMatch[1]) + (chapterMatch[2] ? Number(`0.${chapterMatch[2]}`) : 0)
-            : 0;
-          const chapterLabel = `Chapitre ${chapterNumber}`;
-          return { pages, seriesTitle, chapterLabel };
-        },
-      },
-      (results) => {
-        const first = results?.[0]?.result as ChapterDomData | undefined;
-        resolve(first ?? { pages: [], seriesTitle: 'Série', chapterLabel: '' });
-      },
-    );
-  });
+  return Promise.all([
+    sendContentRequest<PageRef[]>(tabId, 'READ_CHAPTER_PAGES', adapterId),
+    sendContentRequest<ChapterMeta>(tabId, 'READ_CHAPTER_META', adapterId),
+  ])
+    .then(([pages, meta]) => ({
+      pages: pages.map((page) => ({
+        ...page,
+        id: `${page.index}-${page.url}`,
+        label: page.url.split('/').filter(Boolean).pop() ?? `Page ${page.index}`,
+        selected: true,
+      })),
+      seriesTitle: meta.series,
+      chapterLabel: meta.label,
+    }))
+    .catch(() => ({ pages: [], seriesTitle: 'Série', chapterLabel: '' }));
 }
 
 function createActionButton(label: string, onClick: () => void): HTMLButtonElement {
@@ -214,7 +145,7 @@ const chapterDownloadModule: GrandloadModule = {
 
     const meta = document.createElement('div');
     meta.className = 'small text-muted';
-    meta.textContent = `Source : ${ctx.url}`;
+    meta.textContent = `Source : ${formatChapterSource(ctx.url)}`;
     panel.appendChild(meta);
 
     // Option pour activer/désactiver les pré-exclusions (RG-106)

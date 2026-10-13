@@ -17,10 +17,9 @@ function isContentRequest(value: unknown): value is ContentRequest {
   );
 }
 
-async function handleContentRequest<T extends 'READ_SERIES' | 'READ_CHAPTER_PAGES'>(
-  type: T,
-  payload: MessagePayloadMap[T],
-): Promise<MessageResultMap[T]> {
+async function handleContentRequest<
+  T extends 'READ_SERIES' | 'READ_CHAPTER_PAGES' | 'READ_CHAPTER_META',
+>(type: T, payload: MessagePayloadMap[T]): Promise<MessageResultMap[T]> {
   const adapter = getAdapter(payload.adapterId);
   if (!adapter) {
     throw new Error(`Adaptateur inconnu : ${payload.adapterId}`);
@@ -28,6 +27,10 @@ async function handleContentRequest<T extends 'READ_SERIES' | 'READ_CHAPTER_PAGE
 
   if (type === 'READ_SERIES') {
     return adapter.readSeries(document) as MessageResultMap[T];
+  }
+
+  if (type === 'READ_CHAPTER_META') {
+    return adapter.readChapterMeta(document, window.location.href) as MessageResultMap[T];
   }
 
   if (adapter.prepareChapter) {
@@ -47,7 +50,11 @@ if (!contentGlobal.__grandloadContentReader) {
     if (!isContentRequest(message)) {
       return false;
     }
-    if (message.type !== 'READ_SERIES' && message.type !== 'READ_CHAPTER_PAGES') {
+    if (
+      message.type !== 'READ_SERIES' &&
+      message.type !== 'READ_CHAPTER_PAGES' &&
+      message.type !== 'READ_CHAPTER_META'
+    ) {
       return false;
     }
 
