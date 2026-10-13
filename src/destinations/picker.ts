@@ -38,11 +38,6 @@ export function createDestinationPicker(initial: DestinationSettings): {
   choose.type = 'button';
   choose.className = 'btn btn-outline-secondary btn-sm';
   choose.textContent = 'Choisir un dossier…';
-  const saveAsFallback = document.createElement('button');
-  saveAsFallback.type = 'button';
-  saveAsFallback.className = 'btn btn-link btn-sm text-start p-0';
-  saveAsFallback.textContent = 'Choisir le chemin de l’archive à chaque téléchargement';
-  saveAsFallback.hidden = true;
   const status = document.createElement('small');
   status.className = 'text-body-secondary';
   let userInteracted = false;
@@ -72,10 +67,14 @@ export function createDestinationPicker(initial: DestinationSettings): {
       .catch(async (error: unknown) => {
         if (isDirectoryPickerCancellation(error)) {
           const previousHandle = await getCustomFolderHandle();
-          status.textContent = previousHandle
-            ? `Dossier : ${previousHandle.name} (sélection conservée)`
-            : 'Sélection annulée. Aucun dossier personnalisé n’est enregistré.';
-          saveAsFallback.hidden = Boolean(previousHandle);
+          if (previousHandle) {
+            status.textContent = `Dossier : ${previousHandle.name} (sélection conservée)`;
+          } else {
+            // Le sélecteur du Side Panel peut être annulé par Chrome. Sans
+            // handle, le mode personnalisé ne doit pas créer une tâche bloquée.
+            mode.value = 'ask-each-time';
+            status.textContent = 'Sélection annulée. Le chemin sera demandé pour chaque archive.';
+          }
           return;
         }
         status.textContent = error instanceof Error ? error.message : 'Sélection impossible.';
@@ -84,13 +83,7 @@ export function createDestinationPicker(initial: DestinationSettings): {
         choose.disabled = !isCustomFolderAvailable();
       });
   });
-  saveAsFallback.addEventListener('click', () => {
-    userInteracted = true;
-    mode.value = 'ask-each-time';
-    saveAsFallback.hidden = true;
-    status.textContent = 'Le chemin sera demandé pour chaque archive.';
-  });
-  element.append(legend, mode, template, choose, status, saveAsFallback);
+  element.append(legend, mode, template, choose, status);
   return {
     element,
     getSettings: () => ({

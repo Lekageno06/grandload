@@ -8,7 +8,10 @@ import type { Job, PageContext } from '../core/types';
 import { formatJobLabel } from './job-labels';
 import { getVisibleModules } from './module-visibility';
 import { icon } from '../ui/icons';
-import { requestCustomFolderPermission } from '../destinations/custom-folder';
+import {
+  chooseAndStoreCustomFolder,
+  isDirectoryPickerCancellation,
+} from '../destinations/custom-folder';
 
 declare const __BUILD_DATE__: string;
 
@@ -94,14 +97,18 @@ function renderJobs(): void {
           authorize.textContent = 'Autoriser à nouveau';
           authorize.addEventListener('click', () => {
             authorize.disabled = true;
-            void requestCustomFolderPermission().then((granted) => {
-              if (!granted) {
+            // Sans handle mémorisé, requestPermission() ne peut rien demander.
+            // Ouvrir le sélecteur directement conserve le geste utilisateur.
+            void chooseAndStoreCustomFolder()
+              .then(() => {
+                void send('JOB_CONTROL', { jobId: job.id, action: 'resume' }).then(() => renderJobs());
+              })
+              .catch((error: unknown) => {
                 authorize.disabled = false;
-                setStatus('Autorisation du dossier personnalisé refusée.');
-                return;
-              }
-              void send('JOB_CONTROL', { jobId: job.id, action: 'resume' }).then(() => renderJobs());
-            });
+                setStatus(isDirectoryPickerCancellation(error)
+                  ? 'Sélection annulée : choisissez un dossier pour reprendre la tâche.'
+                  : error instanceof Error ? error.message : 'Impossible d’autoriser le dossier personnalisé.');
+              });
           });
           item.append(authorize);
         }
