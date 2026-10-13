@@ -84,9 +84,19 @@ async function scheduleDownloads(items: DownloadItem[], _domain: string): Promis
 console.info('Grandload service worker started.');
 
 if (chrome.sidePanel?.setPanelBehavior) {
-  void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch((error: unknown) => {
+  // L’ouverture explicite depuis onClicked conserve le geste qui active
+  // activeTab. Le menu Side Panel seul ne rend pas toujours l’URL lisible.
+  void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }).catch((error: unknown) => {
     console.warn('Le panneau latéral ne peut pas être configuré.', error);
   });
+  if (chrome.action?.onClicked && chrome.sidePanel.open) {
+    chrome.action.onClicked.addListener((tab) => {
+      if (typeof tab.windowId !== 'number') return;
+      void chrome.sidePanel.open({ windowId: tab.windowId }).catch((error: unknown) => {
+        console.warn('Le panneau latéral ne peut pas être ouvert.', error);
+      });
+    });
+  }
 }
 
 if (typeof chrome.downloads.onDeterminingFilename?.addListener === 'function') {
