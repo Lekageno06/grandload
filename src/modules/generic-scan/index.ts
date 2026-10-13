@@ -283,6 +283,20 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
   wrapper.appendChild(imageSection);
   let gallery: ImageGallery | undefined;
 
+  const renderSkeletons = (): void => {
+    imageSection.replaceChildren();
+    imageSection.hidden = false;
+    const grid = document.createElement('div');
+    grid.className = 'ui-grid';
+    for (let index = 0; index < 6; index += 1) {
+      const skeleton = document.createElement('div');
+      skeleton.className = 'ui-card ui-skeleton';
+      skeleton.setAttribute('aria-hidden', 'true');
+      grid.appendChild(skeleton);
+    }
+    imageSection.appendChild(grid);
+  };
+
   const renderView = (): void => {
     const showingImages = activeView === 'images';
     imageSection.hidden = !showingImages;
@@ -613,6 +627,7 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
     };
 
     setScanState('loading');
+    renderSkeletons();
     try {
       const results = await scanCurrentPageInTab(ctx.tabId, ctx.url, lazyCheckbox.checked);
       state.items = results;
