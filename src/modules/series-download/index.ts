@@ -1,5 +1,6 @@
 import { send } from '../../core/messaging';
 import { getJobs, getPrefs, readStorage } from '../../core/storage';
+import { createDestinationPicker } from '../../destinations/picker';
 import { registerModule } from '../../core/registry';
 import type {
   ChapterRef,
@@ -215,6 +216,9 @@ const seriesDownloadModule: GrandloadModule = {
     }
     formatLabel.appendChild(formatSelect);
     panel.appendChild(formatLabel);
+    const destinationPicker = createDestinationPicker({ mode: 'browser', subfolderTemplate: 'Grandload', customFolderName: '' });
+    void getPrefs().then((prefs) => destinationPicker.setSettings(prefs.destination));
+    panel.appendChild(destinationPicker.element);
 
     const startButton = document.createElement('button');
     startButton.type = 'button';
@@ -485,6 +489,7 @@ const seriesDownloadModule: GrandloadModule = {
         }
 
         const prefs = await getPrefs();
+        const destination = destinationPicker.getSettings();
         const response = await send('JOB_CREATE', {
           kind: 'series',
           params: {
@@ -495,7 +500,8 @@ const seriesDownloadModule: GrandloadModule = {
             packagerId: formatSelect.value,
             requestDelayMs: prefs.requestDelayMs,
             downloadFolder: prefs.downloadFolder,
-            destinationTemplate: prefs.destination.subfolderTemplate,
+            destinationMode: destination.mode,
+            destinationTemplate: destination.subfolderTemplate,
             chapters: selected.map(
               ({ selected: _selected, downloaded: _downloaded, ...chapter }) => chapter,
             ),

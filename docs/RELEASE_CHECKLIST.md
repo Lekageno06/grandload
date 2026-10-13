@@ -41,3 +41,6 @@
 - [ ] Captures fictives ou libres de droits uniquement.
 - [ ] Description neutre sans nom de site ni de série.
 - [ ] Respect des droits d'auteur et des conditions des sites rappelé dans la fiche.
+- [ ] Destination navigateur : gabarit et conflit de nom vérifiés.
+- [ ] Destination personnalisée : handle mémorisé, permission redemandée par clic et conflit vérifiés.
+- [ ] Destination « demander à chaque fois » : `saveAs` vérifié ; format dossier refusé explicitement.

@@ -45,6 +45,7 @@ const JOB_STATES: readonly Job['state'][] = [
   'queued',
   'running',
   'paused',
+  'needs-permission',
   'done',
   'failed',
   'ignored',

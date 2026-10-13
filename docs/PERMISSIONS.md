@@ -20,3 +20,6 @@ L'audit du code ne relève aucune permission fixe inutilisée. `offscreen` est u
 Le manifest Firefox conserve les cinq permissions communes et les mêmes permissions d'hôtes optionnelles. Il ne demande ni `tabs`, ni `webRequest`, ni `cookies`, ni `declarativeNetRequestWithHostAccess`, car aucune fonctionnalité ne les utilise.
 
 Les permissions d'hôtes sont demandées uniquement après l'action de l'utilisateur, par origine. Grandload ne demande pas d'accès aux cookies, ne modifie pas les requêtes et ne contourne aucune protection.
+## Phase 5 — destinations
+
+Aucune permission n'est ajoutée. Le mode dossier personnalisé utilise File System Access et IndexedDB de l'extension ; le mode « demander à chaque fois » réutilise `downloads` avec `saveAs: true`.

@@ -249,3 +249,8 @@ est appliqué à l'élément racine du panneau.
 | `storage.local`   | `history:<seriesId>`     | chapitres déjà téléchargés                                |
 | `storage.local`   | `prefs`                  | préférences (format, concurrence, délais, modules actifs) |
 | `storage.local`   | `exclusions:<adapterId>` | règles d'exclusion mémorisées                             |
+## 12. Destinations
+
+`src/destinations/` contient `types.ts`, `registry.ts`, `template.ts`, `browser.ts`, `custom-folder.ts` et `picker.ts`.
+Les handles de dossier restent dans IndexedDB de l'origine de l'extension et ne transitent jamais par `chrome.runtime.sendMessage`.
+Avant chaque tâche personnalisée, `queryPermission` est vérifié ; sinon le job passe à `needs-permission` et attend « Autoriser à nouveau ».

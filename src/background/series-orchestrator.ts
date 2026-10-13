@@ -31,6 +31,7 @@ export type SeriesJobParams = {
   requestDelayMs: number;
   downloadFolder: string;
   destinationTemplate?: string;
+  destinationMode?: 'browser' | 'custom-folder' | 'ask-each-time';
   chapters: ChapterRef[];
   currentChildId?: string;
   currentTabId?: number;
@@ -54,6 +55,7 @@ type SeriesChapterParams = {
   requestDelayMs: number;
   downloadFolder: string;
   destinationTemplate?: string;
+  destinationMode?: 'browser' | 'custom-folder' | 'ask-each-time';
 };
 
 type HistoryEntry = { number: number; label: string; url: string; completedAt: number };
@@ -129,6 +131,14 @@ function seriesParams(value: Record<string, unknown>): SeriesJobParams {
       throw new GrandloadError('INVALID_URL', templateValidation.error ?? 'Gabarit invalide.');
     }
   }
+  if (
+    value.destinationMode !== undefined &&
+    value.destinationMode !== 'browser' &&
+    value.destinationMode !== 'custom-folder' &&
+    value.destinationMode !== 'ask-each-time'
+  ) {
+    throw new GrandloadError('INVALID_URL', 'Mode de destination invalide.');
+  }
 
   return {
     seriesId: value.seriesId,
@@ -144,6 +154,10 @@ function seriesParams(value: Record<string, unknown>): SeriesJobParams {
     ...(typeof value.destinationTemplate === 'string'
       ? { destinationTemplate: value.destinationTemplate }
       : {}),
+    destinationMode:
+      value.destinationMode === 'custom-folder' || value.destinationMode === 'ask-each-time'
+        ? value.destinationMode
+        : 'browser',
     chapters: [...chapters].sort((left, right) => left.number - right.number),
   };
 }
@@ -170,6 +184,7 @@ export async function createSeriesJob(
       requestDelayMs: params.requestDelayMs,
       downloadFolder: params.downloadFolder,
       ...(params.destinationTemplate ? { destinationTemplate: params.destinationTemplate } : {}),
+      destinationMode: params.destinationMode ?? 'browser',
       options: {},
     } satisfies SeriesChapterParams,
     progress: { done: 0, total: 0 },
@@ -723,6 +738,7 @@ async function processSeriesChild(parentId: string, childId: string): Promise<vo
         ...(seriesParams.destinationTemplate
           ? { destinationTemplate: seriesParams.destinationTemplate }
           : {}),
+        destinationMode: seriesParams.destinationMode,
       },
     };
     await updateJob(childId, (current) => ({
@@ -776,6 +792,14 @@ export async function runSeriesJob(parentId: string): Promise<void> {
       const completedChild = afterChild[childId];
       const parentAfterChild = afterChild[parentId];
       if (!parentAfterChild || parentAfterChild.state === 'cancelled') return;
+      if (completedChild?.state === 'needs-permission') {
+        await updateJob(parentId, (current) => ({
+          ...current,
+          state: 'needs-permission',
+          ...(completedChild.error ? { error: completedChild.error } : {}),
+        }));
+        return;
+      }
 
       if (completedChild && isRateLimited(completedChild)) {
         await backoffAndPauseSeriesForRateLimit(parentId, childId);
@@ -854,7 +878,7 @@ export async function handleSeriesJobControl(
   }
 
   if (payload.action === 'resume') {
-    if (parent.state !== 'paused') return { handled: true, ok: false };
+    if (parent.state !== 'paused' && parent.state !== 'needs-permission') return { handled: true, ok: false };
     if (Date.now() - parent.createdAt > 10 * 60 * 1000) {
       await failStaleSeriesJob(parent);
       return { handled: true, ok: false };

@@ -1,6 +1,6 @@
 export type PageKind = 'chapter' | 'series' | 'other';
 export type JobState =
-  'queued' | 'running' | 'paused' | 'done' | 'failed' | 'ignored' | 'cancelled';
+  'queued' | 'running' | 'paused' | 'needs-permission' | 'done' | 'failed' | 'ignored' | 'cancelled';
 
 export interface PageContext {
   url: string;

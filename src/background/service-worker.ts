@@ -32,6 +32,7 @@ function createJobId(kind: string): string {
 async function scheduleDownloads(items: DownloadItem[], _domain: string): Promise<void> {
   const prefs = await getPrefs();
   const template = prefs.destination.subfolderTemplate;
+  const saveAs = prefs.destination.mode === 'ask-each-time';
   const queue = [...items];
   let inFlight = 0;
 
@@ -55,6 +56,7 @@ async function scheduleDownloads(items: DownloadItem[], _domain: string): Promis
           {
             url: item.url,
             filename,
+            saveAs,
             conflictAction: 'uniquify',
           },
           () => {
@@ -117,6 +119,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     type === 'BUILD_ARCHIVE' ||
     type === 'CANCEL_ARCHIVE' ||
     type === 'REVOKE_BLOBS' ||
+    type === 'WRITE_CUSTOM_FILES' ||
     type === 'JOB_UPDATE'
   ) {
     return false;

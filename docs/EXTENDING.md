@@ -37,3 +37,9 @@ Les étapes (extraction, filtre, acquisition, empaquetage) sont des fonctions `(
 - [ ] Tests unitaires + fixture
 - [ ] RG et docs mises à jour
 - [ ] Permission supplémentaire = signalée
+## Ajouter une destination
+
+1. Définir un `DestinationWriter` dans `src/destinations/` et l'enregistrer avec `registerDestination`.
+2. Utiliser `expandDestinationTemplate` pour les chemins et respecter RG-32 pour chaque segment.
+3. Ne jamais transmettre un handle File System Access par `chrome.runtime.sendMessage` : il reste dans IndexedDB.
+4. Ajouter des tests pour les conflits, les permissions, l'annulation et l'absence de fichier partiel.

@@ -116,3 +116,13 @@ Les règles RG-700 à RG-704 sont réécrites pour la refonte UI :
 - **RG-702** 🔴 États vides explicites ; erreurs lisibles, détail technique dans `console.error`.
 - **RG-703** 🔴 Progression visible (par chapitre et globale) ; boutons pause/reprise/annulation.
 - **RG-704** 🟡 Préférences mémorisées (format, concurrence, délais, dossier, modules actifs).
+## H bis. Destinations
+
+- **RG-311** : trois modes sont proposés : navigateur, dossier personnalisé et demander à chaque fois.
+- **RG-312** : le gabarit accepte `{serie}`, `{chapitre}`, `{domaine}`, `{titre}` et `{date}` ; chaque segment respecte RG-32 ; vide signifie Téléchargements.
+- **RG-313** : le handle personnalisé reste dans IndexedDB et ne transite jamais par un message runtime ni vers un tiers.
+- **RG-314** : `queryPermission` est vérifié avant chaque tâche ; `needs-permission` exige un clic explicite.
+- **RG-315** : demander à chaque fois utilise `saveAs: true` pour une archive unique ; le format dossier est refusé avec une explication.
+- **RG-316** : les sous-dossiers sont créés selon le gabarit, les conflits utilisent `(1)`, `(2)` et une écriture interrompue ne laisse pas de fichier partiel.
+
+- **RG-303** : le chemin d'archive est produit par la destination active et son gabarit validé RG-32 ; le nom de chapitre reste nettoyé.

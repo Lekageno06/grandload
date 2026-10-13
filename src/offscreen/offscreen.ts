@@ -1,6 +1,7 @@
 import { toGrandloadError } from '../core/errors';
 import type { MessagePayloadMap, MessageResponse } from '../core/messaging';
 import { createArchive, revokeBlobUrls } from './archive-builder';
+import { writeCustomFiles } from '../destinations/custom-folder';
 
 const activeBuilds = new Map<string, AbortController>();
 
@@ -62,6 +63,17 @@ chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) =
     revokeBlobUrls(payload.blobUrls);
     sendResponse({ ok: true, data: { ok: true } });
     return false;
+  }
+
+  if (message.type === 'WRITE_CUSTOM_FILES') {
+    const payload = message.payload as MessagePayloadMap['WRITE_CUSTOM_FILES'];
+    void writeCustomFiles(payload.files)
+      .then(() => sendResponse({ ok: true, data: { ok: true } }))
+      .catch((error: unknown) => sendResponse({
+        ok: false,
+        error: { code: 'FETCH_FAILED', message: error instanceof Error ? error.message : 'Écriture impossible.' },
+      }));
+    return true;
   }
 
   return false;

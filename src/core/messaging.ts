@@ -21,7 +21,8 @@ export type MessageKind =
   | 'BUILD_ARCHIVE'
   | 'ARCHIVE_PROGRESS'
   | 'CANCEL_ARCHIVE'
-  | 'REVOKE_BLOBS';
+  | 'REVOKE_BLOBS'
+  | 'WRITE_CUSTOM_FILES';
 
 export interface MessagePayloadMap {
   PAGE_CONTEXT: { tabId: number };
@@ -48,6 +49,10 @@ export interface MessagePayloadMap {
   ARCHIVE_PROGRESS: { jobId: string; done: number; total: number };
   CANCEL_ARCHIVE: { jobId: string };
   REVOKE_BLOBS: { blobUrls: string[] };
+  WRITE_CUSTOM_FILES: {
+    jobId: string;
+    files: Array<{ blobUrl: string; filename: string }>;
+  };
 }
 
 export interface MessageResultMap {
@@ -63,6 +68,7 @@ export interface MessageResultMap {
   ARCHIVE_PROGRESS: void;
   CANCEL_ARCHIVE: { ok: boolean };
   REVOKE_BLOBS: { ok: boolean };
+  WRITE_CUSTOM_FILES: { ok: boolean };
 }
 
 export type MessageEnvelope<T extends MessageKind> = {
@@ -189,6 +195,7 @@ export const messageTypes: readonly MessageKind[] = [
   'ARCHIVE_PROGRESS',
   'CANCEL_ARCHIVE',
   'REVOKE_BLOBS',
+  'WRITE_CUSTOM_FILES',
 ];
 
 export type JobMessage = Pick<Job, 'id' | 'kind' | 'state' | 'progress' | 'error'>;

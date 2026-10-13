@@ -8,6 +8,7 @@ import type { Job, PageContext } from '../core/types';
 import { formatJobLabel } from './job-labels';
 import { getVisibleModules } from './module-visibility';
 import { icon } from '../ui/icons';
+import { requestCustomFolderPermission } from '../destinations/custom-folder';
 
 declare const __BUILD_DATE__: string;
 
@@ -64,7 +65,7 @@ function renderJobs(): void {
         const state = document.createElement('div');
         state.className = 'job-item__meta';
         const labels: Record<Job['state'], string> = {
-          queued: 'En attente', running: 'En cours', paused: 'En pause', done: 'Terminé',
+          queued: 'En attente', running: 'En cours', paused: 'En pause', 'needs-permission': 'Autorisation requise', done: 'Terminé',
           failed: 'Échec', ignored: 'Ignoré', cancelled: 'Annulé',
         };
         state.textContent = labels[job.state];
@@ -85,6 +86,24 @@ function renderJobs(): void {
           message.textContent = job.error?.message ?? job.warning?.message ?? '';
           details.append(summary, message);
           item.append(details);
+        }
+        if (job.state === 'needs-permission') {
+          const authorize = document.createElement('button');
+          authorize.type = 'button';
+          authorize.className = 'ui-button ui-button--secondary';
+          authorize.textContent = 'Autoriser à nouveau';
+          authorize.addEventListener('click', () => {
+            authorize.disabled = true;
+            void requestCustomFolderPermission().then((granted) => {
+              if (!granted) {
+                authorize.disabled = false;
+                setStatus('Autorisation du dossier personnalisé refusée.');
+                return;
+              }
+              void send('JOB_CONTROL', { jobId: job.id, action: 'resume' }).then(() => renderJobs());
+            });
+          });
+          item.append(authorize);
         }
         const cancel = document.createElement('button');
         cancel.type = 'button';

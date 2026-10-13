@@ -2,6 +2,7 @@ import { registerModule } from '../../core/registry';
 import { getAdapter } from '../../core/registry';
 import { send } from '../../core/messaging';
 import { getExclusions, getJobs, getPrefs, setExclusions, updateJobs } from '../../core/storage';
+import { createDestinationPicker } from '../../destinations/picker';
 import type { ExclusionMemory } from '../../core/storage';
 import type {
   ArchiveMeta,
@@ -228,6 +229,9 @@ const chapterDownloadModule: GrandloadModule = {
     archiveNameInput.maxLength = 150;
     archiveNameLabel.appendChild(archiveNameInput);
     panel.appendChild(archiveNameLabel);
+    const destinationPicker = createDestinationPicker({ mode: 'browser', subfolderTemplate: 'Grandload', customFolderName: '' });
+    void getPrefs().then((prefs) => destinationPicker.setSettings(prefs.destination));
+    panel.appendChild(destinationPicker.element);
 
     const progressContainer = document.createElement('div');
     progressContainer.className = 'd-grid gap-1';
@@ -537,6 +541,7 @@ const chapterDownloadModule: GrandloadModule = {
         })();
         const chapterLabel = state.chapterData.chapterLabel || `Chapitre ${chapterNumber}`;
         const prefs = await getPrefs();
+        const destination = destinationPicker.getSettings();
         const meta: ArchiveMeta = {
           series: state.chapterData.seriesTitle,
           chapter: { number: chapterNumber, label: chapterLabel, url: ctx.url },
@@ -552,7 +557,8 @@ const chapterDownloadModule: GrandloadModule = {
             meta,
             options: {
               downloadFolder: prefs.downloadFolder,
-              destinationTemplate: prefs.destination.subfolderTemplate,
+              destinationMode: destination.mode,
+              destinationTemplate: destination.subfolderTemplate,
               archiveName: archiveNameInput.value,
             },
           },

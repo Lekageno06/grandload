@@ -10,6 +10,7 @@ import type { MessagePayloadMap, MessageResponse } from '../core/messaging';
 import { sanitizeDownloadFolder, sanitizeFileName, validateDownloadFolder } from '../shared/url-utils';
 import { getPackagerMetadata } from '../packagers/metadata';
 import { destinationTemplateValues, expandDestinationTemplate, validateDestinationTemplate } from '../destinations/template';
+import { getCustomFolderHandle, queryCustomFolderPermission, writeCustomFiles } from '../destinations/custom-folder';
 
 export type ChapterJobParams = {
   pages: PageRef[];
@@ -224,12 +225,25 @@ function parseChapterParams(value: Record<string, unknown>): ChapterJobParams {
       throw new GrandloadError('INVALID_URL', templateValidation.error ?? 'Gabarit invalide.');
     }
   }
+  const destinationMode = options.destinationMode;
+  if (
+    destinationMode !== undefined &&
+    destinationMode !== 'browser' &&
+    destinationMode !== 'custom-folder' &&
+    destinationMode !== 'ask-each-time'
+  ) {
+    throw new GrandloadError('INVALID_URL', 'Mode de destination invalide.');
+  }
 
   return {
     pages: value.pages as PageRef[],
     packagerId: value.packagerId,
     meta,
-    options: { ...options, downloadFolder: sanitizeDownloadFolder(downloadFolder) },
+    options: {
+      ...options,
+      downloadFolder: sanitizeDownloadFolder(downloadFolder),
+      destinationMode: destinationMode ?? 'browser',
+    },
   };
 }
 
@@ -258,7 +272,7 @@ function supportsOffscreenArchiveRuntime(): boolean {
   );
 }
 
-function sendToOffscreen<T extends 'BUILD_ARCHIVE' | 'CANCEL_ARCHIVE' | 'REVOKE_BLOBS'>(
+function sendToOffscreen<T extends 'BUILD_ARCHIVE' | 'CANCEL_ARCHIVE' | 'REVOKE_BLOBS' | 'WRITE_CUSTOM_FILES'>(
   type: T,
   payload: MessagePayloadMap[T],
 ): Promise<MessageResponse<T extends 'BUILD_ARCHIVE' ? ArchiveBuildResult : { ok: boolean }>> {
@@ -373,13 +387,14 @@ function waitForDownload(downloadId: number): Promise<void> {
 async function downloadArtifact(
   jobId: string,
   artifact: { blobUrl: string; filename: string },
+  saveAs = false,
 ): Promise<chrome.downloads.DownloadItem> {
   await setRequestedDownloadName(artifact.blobUrl, artifact.filename);
   let downloadId: number;
   try {
     downloadId = await new Promise<number>((resolve, reject) => {
       chrome.downloads.download(
-        { url: artifact.blobUrl, filename: artifact.filename, conflictAction: 'uniquify' },
+        { url: artifact.blobUrl, filename: artifact.filename, saveAs, conflictAction: 'uniquify' },
         (id) => {
           const error = chrome.runtime.lastError;
           if (error) {
@@ -480,6 +495,17 @@ export async function runChapterJob(jobId: string): Promise<void> {
   }
 
   const params = parseChapterParams(queued.params);
+  if (params.options.destinationMode === 'custom-folder') {
+    const permission = await queryCustomFolderPermission();
+    if (!await getCustomFolderHandle() || permission !== 'granted') {
+      await updateJob(jobId, (job) => ({
+        ...job,
+        state: 'needs-permission',
+        error: { code: 'PERMISSION_REQUIRED', message: 'Autorisez à nouveau le dossier personnalisé avant de continuer.' },
+      }));
+      return;
+    }
+  }
   const running: Job = {
     ...queued,
     state: 'running',
@@ -507,19 +533,38 @@ export async function runChapterJob(jobId: string): Promise<void> {
     const archiveName = typeof archiveNameValue === 'string' ? archiveNameValue : undefined;
     const destinationTemplateValue = params.options.destinationTemplate;
     const destinationTemplate = typeof destinationTemplateValue === 'string' ? destinationTemplateValue : undefined;
-    for (const artifact of artifactDownloads(
+    const artifacts = artifactDownloads(
       result,
       params.meta,
       packager.extension,
       downloadFolder,
       archiveName,
       destinationTemplate,
-    )) {
+    );
+    const destinationMode = params.options.destinationMode;
+    if (destinationMode === 'ask-each-time' && params.packagerId === 'folder') {
+      throw new GrandloadError(
+        'INVALID_URL',
+        'Le mode « demander à chaque fois » ne peut pas enregistrer un dossier. Choisissez ZIP/CBZ ou un autre mode de destination.',
+      );
+    }
+    if (destinationMode === 'custom-folder') {
+      const customFiles = artifacts.map((artifact) => ({ blobUrl: artifact.blobUrl, filename: artifact.filename }));
+      if (supportsOffscreenArchiveRuntime()) {
+        await ensureOffscreenDocument();
+        const response = await sendToOffscreen('WRITE_CUSTOM_FILES', { jobId, files: customFiles });
+        if (!response.ok) throw new GrandloadError('FETCH_FAILED', response.error.message);
+      } else {
+        await writeCustomFiles(customFiles);
+      }
+    } else {
+      for (const artifact of artifacts) {
       const current = (await getJobs())[jobId];
       if (!current || current.state === 'cancelled') {
         return;
       }
-      await downloadArtifact(jobId, artifact);
+      await downloadArtifact(jobId, artifact, destinationMode === 'ask-each-time');
+      }
     }
 
     await updateJob(jobId, (job) => ({
@@ -625,6 +670,18 @@ export async function handleJobControl(
 ): Promise<{ ok: boolean }> {
   if (payload.action === 'cancel') {
     return await cancelChapterJob(payload.jobId);
+  }
+  if (payload.action === 'resume') {
+    const job = (await getJobs())[payload.jobId];
+    if (job?.state === 'needs-permission' || job?.state === 'paused') {
+      await updateJob(payload.jobId, (current) => {
+        const next = { ...current, state: 'queued' as const };
+        delete next.error;
+        return next;
+      });
+      void runChapterJob(payload.jobId);
+      return { ok: true };
+    }
   }
   return { ok: false };
 }

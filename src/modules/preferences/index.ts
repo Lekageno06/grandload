@@ -2,6 +2,11 @@ import { registerModule } from '../../core/registry';
 import { listModules } from '../../core/registry';
 import { getPrefs, setPrefs } from '../../core/storage';
 import type { GrandloadModule, ModuleApi, PageContext } from '../../core/types';
+import {
+  chooseAndStoreCustomFolder,
+  getCustomFolderHandle,
+  isCustomFolderAvailable,
+} from '../../destinations/custom-folder';
 
 const preferencesModule: GrandloadModule = {
   id: 'preferences',
@@ -123,6 +128,34 @@ const preferencesModule: GrandloadModule = {
     }
     panel.appendChild(destinationModeLabel);
     destinationModeLabel.appendChild(destinationMode);
+    const customFolderStatus = document.createElement('div');
+    customFolderStatus.className = 'small text-body-secondary';
+    const chooseFolderButton = document.createElement('button');
+    chooseFolderButton.type = 'button';
+    chooseFolderButton.className = 'btn btn-outline-secondary btn-sm';
+    chooseFolderButton.textContent = 'Choisir un dossier…';
+    panel.append(customFolderStatus, chooseFolderButton);
+
+    const customFolderAvailable = isCustomFolderAvailable();
+    const customFolderOption = destinationMode.querySelector<HTMLOptionElement>('[value="custom-folder"]');
+    if (!customFolderAvailable && customFolderOption) {
+      customFolderOption.disabled = true;
+      customFolderOption.title = 'Non disponible dans ce navigateur';
+      destinationMode.value = 'browser';
+      customFolderStatus.textContent = 'Dossier personnalisé : non disponible dans ce navigateur.';
+      chooseFolderButton.disabled = true;
+    }
+    chooseFolderButton.addEventListener('click', () => {
+      void chooseAndStoreCustomFolder()
+        .then((handle) => {
+          customFolderInput.value = handle.name;
+          customFolderStatus.textContent = `Dossier sélectionné : ${handle.name}`;
+          destinationMode.value = 'custom-folder';
+        })
+        .catch((error: unknown) => {
+          customFolderStatus.textContent = error instanceof Error ? error.message : 'Sélection annulée.';
+        });
+    });
 
     const templateRow = document.createElement('label');
     templateRow.className = 'd-grid gap-1';
@@ -210,6 +243,13 @@ const preferencesModule: GrandloadModule = {
       destinationMode.value = prefs.destination.mode;
       templateInput.value = prefs.destination.subfolderTemplate;
       customFolderInput.value = prefs.destination.customFolderName;
+      void getCustomFolderHandle().then((handle) => {
+        if (handle) customFolderStatus.textContent = `Dossier sélectionné : ${handle.name}`;
+        if (prefs.destination.mode === 'custom-folder' && !handle) {
+          customFolderStatus.textContent = 'Le dossier mémorisé est indisponible. Choisissez-en un autre avant de continuer.';
+          destinationMode.value = 'browser';
+        }
+      });
       strategySelect.value = prefs.acquisitionStrategy || 'auto';
       autoExcludeInput.checked = prefs.autoExclude ?? true;
 

@@ -7,6 +7,8 @@ import { exportCsv, exportJson, exportTxt } from './exports';
 import { filterScanItems, getTypeCounts } from './filters';
 import type { ScanFilterState, ScanItem } from './types';
 import { archiveWarning, getScanStateMessage, type ScanViewState } from './state';
+import { createDestinationPicker } from '../../destinations/picker';
+import { getPrefs } from '../../core/storage';
 
 const typeOptions = [
   'all',
@@ -227,7 +229,9 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
   const archiveEstimate = document.createElement('small');
   archiveEstimate.className = 'text-muted';
   archiveEstimate.textContent = 'Le format et le nom s’appliquent aux images sélectionnées.';
-  downloadSheet.append(downloadSheetTitle, formatSelect, archiveName, archiveEstimate);
+  const destinationPicker = createDestinationPicker({ mode: 'browser', subfolderTemplate: 'Grandload', customFolderName: '' });
+  void getPrefs().then((prefs) => destinationPicker.setSettings(prefs.destination));
+  downloadSheet.append(downloadSheetTitle, formatSelect, archiveName, destinationPicker.element, archiveEstimate);
   wrapper.appendChild(downloadSheet);
 
   const badges = document.createElement('div');
@@ -427,7 +431,8 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
         ...(item.width ? { width: item.width } : {}),
         ...(item.height ? { height: item.height } : {}),
       }));
-      const response = await send('JOB_CREATE', {
+        const destination = destinationPicker.getSettings();
+        const response = await send('JOB_CREATE', {
         kind: 'chapter',
         params: {
           pages,
@@ -438,7 +443,11 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
             pageCount: pages.length,
             sourceUrl: ctx.url,
           },
-          options: { archiveName: archiveName.value },
+          options: {
+            archiveName: archiveName.value,
+            destinationMode: destination.mode,
+            destinationTemplate: destination.subfolderTemplate,
+          },
         },
       });
       api.setStatus?.(
