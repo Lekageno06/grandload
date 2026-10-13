@@ -13,8 +13,20 @@ import { genericAdapter } from '../src/adapters/generic';
 import type { ScanItem } from '../src/modules/generic-scan/types';
 import { JSDOM } from 'jsdom';
 import { dedupeUrls, getBestSrcsetCandidate, normalizeUrl } from '../src/shared/url-utils';
+import genericScanModule from '../src/modules/generic-scan';
 
 describe('états du scan générique', () => {
+  it('reste disponible sur toute page HTTP ou HTTPS, indépendamment du site adapté', () => {
+    expect(genericScanModule.canHandle({
+      url: 'https://news.example/article/42', kind: 'other', adapterId: 'generic', tabId: 1,
+    })).toBe(true);
+    expect(genericScanModule.canHandle({
+      url: 'http://shop.example/catalogue', kind: 'other', adapterId: 'generic', tabId: 2,
+    })).toBe(true);
+    expect(genericScanModule.canHandle({
+      url: 'chrome://extensions', kind: 'other', adapterId: 'generic', tabId: 3,
+    })).toBe(false);
+  });
   it('couvre l’attente, le chargement, les résultats, l’absence, l’erreur et l’autorisation', () => {
     expect(getScanStateMessage('idle')).toBe('Aucun scan lancé.');
     expect(getScanStateMessage('loading')).toBe('Scan en cours…');

@@ -73,6 +73,15 @@ function isPermissionError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return /permission|access|autorisation|not allowed|cannot access/iu.test(message);
 }
+
+async function requestGenericSiteAccess(pageUrl: string): Promise<boolean> {
+  if (!chrome.permissions?.request) return false;
+  const parsed = new URL(pageUrl);
+  const origin = `${parsed.protocol}//${parsed.host}/*`;
+  return await new Promise<boolean>((resolve) => {
+    chrome.permissions.request({ origins: [origin] }, resolve);
+  });
+}
 function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): void {
   const state: ModuleState = {
     items: [],
@@ -642,9 +651,30 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
       setScanState(permission ? 'permission' : 'error');
       emptyMessage.hidden = false;
       emptyMessage.className = 'alert alert-danger mb-0';
-      emptyMessage.textContent = permission
-        ? 'Cliquez sur l’icône Grandload pour autoriser la lecture de cet onglet.'
+      emptyMessage.replaceChildren();
+      const message = document.createElement('p');
+      message.textContent = permission
+        ? `Grandload a besoin d’un accès temporaire à ${new URL(ctx.url).hostname} pour lire cette page.`
         : `Le scan a échoué : ${error instanceof Error ? error.message : String(error)}`;
+      emptyMessage.appendChild(message);
+      if (permission) {
+        const authorize = document.createElement('button');
+        authorize.type = 'button';
+        authorize.className = 'ui-button ui-button--secondary';
+        authorize.textContent = 'Autoriser sur ce site';
+        authorize.addEventListener('click', () => {
+          authorize.disabled = true;
+          void requestGenericSiteAccess(ctx.url).then((granted) => {
+            if (granted) {
+              void load();
+              return;
+            }
+            authorize.disabled = false;
+            api.setStatus?.('Autorisation non accordée pour ce site.');
+          });
+        });
+        emptyMessage.appendChild(authorize);
+      }
       updateButtons();
     }
   };
