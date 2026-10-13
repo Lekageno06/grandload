@@ -2,7 +2,7 @@ import '../adapters';
 import { getAdapter } from '../core/registry';
 import { toGrandloadError } from '../core/errors';
 import type { MessageKind, MessagePayloadMap, MessageResultMap } from '../core/messaging';
-import { readPageAssets } from '../modules/generic-scan/content/dom-reader';
+import { readPageAssets } from './dom-reader';
 
 type ContentRequest = { type: MessageKind; payload: Record<string, unknown> };
 

@@ -18,9 +18,27 @@ describe('architecture de collecte DOM', () => {
         return !normalized.includes('/adapters/') && !normalized.endsWith('/dom-reader.ts');
       })
       .filter((path) =>
-        /querySelectorAll(?:<[^>]+>)?\(\s*['"][^'"]*img/iu.test(readFileSync(path, 'utf8')),
+        /querySelectorAll(?:<[^>]+>)?\(\s*['"](?:img(?:[.: '" ]|\x5b|$)|[^'"]*[, ]img(?:[.: '" ]|\x5b|$))/iu.test(
+          readFileSync(path, 'utf8'),
+        ),
       );
 
+    expect(violations).toEqual([]);
+  });
+
+  it('interdit les imports directs d’un module vers le dossier d’un autre module', () => {
+    const modulesRoot = fileURLToPath(new URL('../src/modules', import.meta.url));
+    const violations: string[] = [];
+    for (const path of sourceFiles(modulesRoot)) {
+      const normalized = path.replaceAll('\\', '/');
+      const owner = normalized.split('/modules/')[1]?.split('/')[0];
+      if (!owner) continue;
+      for (const match of readFileSync(path, 'utf8').matchAll(
+        /from\s+['"][^'"]*modules\/([^/'"]+)/gu,
+      )) {
+        if (match[1] && match[1] !== owner) violations.push(`${normalized} -> ${match[1]}`);
+      }
+    }
     expect(violations).toEqual([]);
   });
 });

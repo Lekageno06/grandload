@@ -1,10 +1,6 @@
-import { classifyResource } from '../classify';
-import {
-  getBestSrcsetCandidate,
-  getBaseNameFromUrl,
-  normalizeUrl,
-} from '../../../shared/url-utils';
-import type { AssetProvenance, ScanItem, ScanSource } from '../types';
+import { classifyResource } from '../modules/generic-scan/classify';
+import { getBestSrcsetCandidate, getBaseNameFromUrl, normalizeUrl } from '../shared/url-utils';
+import type { AssetProvenance, ScanItem, ScanSource } from '../modules/generic-scan/types';
 
 export function getImageProvenance(image: Element): AssetProvenance {
   if (image.closest('header')) return 'header';

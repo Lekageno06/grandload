@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { classifyResource } from '../src/modules/generic-scan/classify';
 import { exportCsv } from '../src/modules/generic-scan/exports';
 import { filterScanItems } from '../src/modules/generic-scan/filters';
-import { readPageAssets } from '../src/modules/generic-scan/content/dom-reader';
+import { readPageAssets } from '../src/content/dom-reader';
+import { genericAdapter } from '../src/adapters/generic';
 import type { ScanItem } from '../src/modules/generic-scan/types';
 import { JSDOM } from 'jsdom';
 import { dedupeUrls, getBestSrcsetCandidate, normalizeUrl } from '../src/shared/url-utils';
@@ -44,6 +45,16 @@ describe('classification', () => {
     expect(classifyResource('https://example.com/chapitre-129-5.pdf', 'a')).toBe('document');
     expect(classifyResource('https://example.com/stream.m3u8', 'video')).toBe('video');
     expect(classifyResource('https://example.com/page', 'a')).toBe('link');
+  });
+});
+
+describe('titre générique', () => {
+  it('nettoie le titre de document avant de l’utiliser comme nom de série', () => {
+    const document = new JSDOM('<title>Lire Série Exemple Scan FR - Mangas Origines</title>', {
+      url: 'https://example.test/oeuvre/serie/',
+    }).window.document;
+
+    expect(genericAdapter.readSeries(document).title).toBe('Série Exemple');
   });
 });
 

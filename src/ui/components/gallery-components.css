@@ -1,0 +1,108 @@
+:root {
+  --gallery-min: 160px;
+}
+.ui-image-gallery {
+  max-height: 720px;
+  overflow: auto;
+}
+.ui-image-gallery__grid {
+  grid-template-columns: repeat(auto-fill, minmax(var(--gallery-min), 1fr));
+}
+.ui-gallery-card {
+  min-width: 0;
+}
+.ui-gallery-card__image {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  background: var(--surface-2);
+}
+.ui-gallery-card__image:not([data-loaded]) {
+  background: linear-gradient(90deg, var(--surface-2), var(--surface-3), var(--surface-2));
+  background-size: 200% 100%;
+  animation: ui-gallery-skeleton 1.2s ease-in-out infinite;
+}
+.ui-gallery-card__image[data-preview='failed'] {
+  object-fit: contain;
+  padding: 20px;
+}
+.ui-gallery-card__check {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid rgb(255 255 255 / 0.7);
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.45);
+  color: transparent;
+  cursor: pointer;
+  transition:
+    background-color 120ms var(--ease),
+    border-color 120ms var(--ease),
+    color 120ms var(--ease),
+    transform 120ms var(--ease);
+}
+.ui-gallery-card__check[data-selected='true'] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+  transform: scale(1.06);
+}
+.ui-gallery-card:has(.ui-gallery-card__check[data-selected='true']) {
+  border-color: var(--accent);
+}
+.ui-image-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
+}
+.ui-image-toolbar__size {
+  min-width: 140px;
+}
+.ui-selection-bar {
+  position: sticky;
+  bottom: 12px;
+  z-index: 5;
+}
+.ui-lightbox {
+  max-width: min(94vw, 1100px);
+  max-height: 94vh;
+  padding: 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--text);
+}
+.ui-lightbox::backdrop {
+  background: rgb(0 0 0 / 0.72);
+}
+.ui-lightbox > img {
+  display: block;
+  max-width: 90vw;
+  max-height: 82vh;
+  object-fit: contain;
+}
+.ui-lightbox__toolbar {
+  display: flex;
+  justify-content: end;
+}
+@keyframes ui-gallery-skeleton {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-gallery-card__image:not([data-loaded]) {
+    animation: none;
+  }
+}

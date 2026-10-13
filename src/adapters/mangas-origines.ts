@@ -46,8 +46,8 @@ function cleanWorkTitle(value: string): string {
     .replace(/\s+/gu, ' ')
     .trim()
     .replace(/^Lire\s+/iu, '')
-    .replace(/\s+(?:Scan\s+FR|Scan)\s*$/iu, '')
     .replace(/\s*-\s*Mangas?\s+Origines\s*$/iu, '')
+    .replace(/\s+(?:Scan\s+FR|Scan)\s*$/iu, '')
     .trim();
 }
 
