@@ -55,3 +55,35 @@ describe('adaptateurs privés hentai', () => {
     expect(decimal).toMatchObject({ number: 129.5, label: 'Chapitre 129.5' });
   });
 });
+
+describe('robustesse commune des adaptateurs privés', () => {
+  it('lit les attributs lazy, conserve les dimensions et applique le filet d’exclusion', () => {
+    const document = new JSDOM(`
+      <header><img class="logo" src="https://hentai-origines.com/logo.png"></header>
+      <main class="ori-lec-scene"><div class="reading-content">
+        <img class="wp-manga-chapter-img" data-lazy-src="/pages/001.webp" width="800" height="1200">
+      </div></main>
+    `, { url: 'https://hentai-origines.com/manga/example/chapitre-1/' }).window.document;
+    const pages = hentaiOriginesAdapter.readChapterPages(document);
+    expect(pages).toHaveLength(1);
+    expect(pages[0]).toMatchObject({
+      url: 'https://hentai-origines.com/pages/001.webp',
+      width: 800,
+      height: 1200,
+    });
+    expect(hentaiOriginesAdapter.autoExclude?.({ ...pages[0]!, index: 1 })).toBeNull();
+    expect(hentaiOriginesAdapter.autoExclude?.({
+      ...pages[0]!, index: 1, url: 'https://hentai-origines.com/promo.webp',
+    })).toContain('banniÃ¨re');
+  });
+
+  it('autorise le repli sur une planche portant le sélecteur attendu, sans collecter le logo', () => {
+    const document = new JSDOM(`
+      <header><img class="wp-manga-chapter-img" src="/logo.webp"></header>
+      <div><img class="wp-manga-chapter-img" src="/page.webp"></div>
+    `, { url: 'https://hentai-scantrad.org/manga/example/chapitre-1/' }).window.document;
+    const pages = hentaiScantradAdapter.readChapterPages(document);
+    expect(pages).toHaveLength(1);
+    expect(pages[0]?.url).toBe('https://hentai-scantrad.org/page.webp');
+  });
+});

@@ -10,6 +10,7 @@ export type WpMangaAdapterConfig = {
   pathPrefix: '/manga' | '/oeuvre';
   seriesSelector: string;
   readerSelector: string;
+  fallbackReaderSelector?: string;
   titleSuffix: RegExp;
   extraOrigins?: (url: URL) => string[];
 };
@@ -56,7 +57,12 @@ function collectChapterAnchors(doc: Document, config: WpMangaAdapterConfig): HTM
 }
 
 function imageSources(image: HTMLImageElement, baseUrl: string): string[] {
-  const values = [image.getAttribute('src'), image.getAttribute('data-src')];
+  const values = [
+    image.getAttribute('src'),
+    image.getAttribute('data-src'),
+    image.getAttribute('data-lazy-src'),
+    image.getAttribute('data-original'),
+  ];
   const urls: string[] = [];
   for (const value of values) {
     const trimmed = value?.trim();
@@ -67,8 +73,8 @@ function imageSources(image: HTMLImageElement, baseUrl: string): string[] {
     const candidate = value
       .split(',')
       .map((entry) => entry.trim().split(/\s+/u)[0] ?? '')
-      .find(Boolean);
-    if (candidate) urls.push(candidate);
+      .filter(Boolean);
+    urls.push(...candidate);
   }
   return urls
     .map((url) => normalizeUrl(url.trim(), baseUrl))
@@ -93,6 +99,16 @@ export function createWpMangaAdapter(config: WpMangaAdapterConfig): SiteAdapter 
     matches: (url) => matchesHost(url.hostname),
     classify,
     ...(config.extraOrigins ? { origins: config.extraOrigins } : {}),
+    excludePatterns: [/(?:banner|banniere|discord|logo|avatar|credit|recrutement|promo)/iu],
+    autoExclude: (page) => {
+      if (page.width !== undefined && page.width > 0 && page.width < 200) {
+        return 'Largeur < 200 px (trop petite)';
+      }
+      if (/(?:banner|banniere|discord|logo|avatar|credit|recrutement|promo)/iu.test(page.url)) {
+        return 'Motif de banniÃ¨re/promo dÃ©tectÃ©';
+      }
+      return null;
+    },
     readSeries: (doc): SeriesInfo => {
       const base = doc.baseURI && !/^about:blank$/iu.test(doc.baseURI) ? doc.baseURI : config.baseUrl;
       const chapters = new Map<string, ChapterMeta>();
@@ -116,14 +132,25 @@ export function createWpMangaAdapter(config: WpMangaAdapterConfig): SiteAdapter 
       return { series: workTitle(doc, config.titleSuffix), number, label: `Chapitre ${number}` };
     },
     readChapterPages: (doc): PageRef[] => {
-      const images = Array.from(doc.querySelectorAll<HTMLImageElement>(config.readerSelector));
+      const primary = Array.from(doc.querySelectorAll<HTMLImageElement>(config.readerSelector));
+      const fallbackSelector = config.fallbackReaderSelector ?? 'img.wp-manga-chapter-img';
+      const fallback = primary.length === 0
+        ? Array.from(doc.querySelectorAll<HTMLImageElement>(fallbackSelector)).filter(
+          (image) => !image.closest('header, footer, nav, .main-navigation_wrap, .wrap_branding'),
+        )
+        : [];
+      const images = primary.length > 0 ? primary : fallback;
+      console.info(
+        `[Grandload] Lecture chapitre: adaptateur=${config.id}; sélecteur="${primary.length > 0 ? config.readerSelector : fallbackSelector}"; ` +
+          `résultats=${images.length}; repli=${primary.length > 0 ? 'non' : `oui (${config.readerSelector})`}`,
+      );
       if (images.length === 0) {
         throw new GrandloadError('ADAPTER_STRUCTURE', 'Confirme l’âge ou connecte-toi sur le site, puis relance l’analyse.');
       }
       return images.flatMap((image, index) => {
         const url = imageSources(image, doc.baseURI && !/^about:blank$/iu.test(doc.baseURI) ? doc.baseURI : config.baseUrl)[0];
         if (!url) return [];
-        return [{ index: index + 1, url, ext: getFileExtension(url), width: Number(image.getAttribute('width')) || image.naturalWidth || 0, height: Number(image.getAttribute('height')) || image.naturalHeight || 0 }];
+        return [{ index: index + 1, url, ext: getFileExtension(url), width: Number.parseInt(image.getAttribute('width') ?? '', 10) || image.naturalWidth || 0, height: Number.parseInt(image.getAttribute('height') ?? '', 10) || image.naturalHeight || 0 }];
       });
     },
     countChapterPageElements: (doc) => doc.querySelectorAll(config.readerSelector).length,
