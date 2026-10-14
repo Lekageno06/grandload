@@ -1,4 +1,4 @@
-import '../adapters';
+import { adaptersReady } from '../adapters';
 import '../modules';
 import { sanitizeFileName, getBaseNameFromUrl } from '../shared/url-utils';
 import { listAdapters } from '../core/registry';
@@ -152,7 +152,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (type === 'PAGE_CONTEXT') {
     const payload = message.payload as { tabId: number };
 
-    chrome.tabs.get(payload.tabId, (tab) => {
+    void adaptersReady.then(() => new Promise<void>((resolve) => {
+      chrome.tabs.get(payload.tabId, (tab) => {
       const url = tab?.url ?? '';
       const foundAdapter =
         listAdapters().find((adapter) => {
@@ -178,7 +179,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         tabId: payload.tabId,
       };
 
-      sendResponse({ ok: true, data: context });
+        sendResponse({ ok: true, data: context });
+        resolve();
+      });
+    })).catch((error: unknown) => {
+      sendResponse({
+        ok: false,
+        error: { code: 'ADAPTER_STRUCTURE', message: error instanceof Error ? error.message : 'Les adaptateurs ne sont pas prêts.' },
+      });
     });
 
     return true;

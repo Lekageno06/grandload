@@ -2,20 +2,23 @@ import { build } from 'esbuild';
 import fs from 'node:fs';
 import path from 'node:path';
 
-const outDir = 'dist';
-const publicDir = 'public';
+const isPrivateBuild = process.argv.includes('--private');
+const outDirArg = process.argv.find((argument) => argument.startsWith('--outdir='));
+const outDir = path.resolve(outDirArg ? outDirArg.slice('--outdir='.length) : isPrivateBuild ? 'dist-private' : 'dist');
+const publicDir = path.resolve('public');
 const watchMode = process.argv.includes('--watch');
 const buildTimestamp = new Date().toISOString();
 const buildDefines = {
   __BUILD_DATE__: JSON.stringify(buildTimestamp),
-  __GRANDLOAD_PRIVATE__: JSON.stringify(process.env.GRANDLOAD_PRIVATE === '1'),
+  __GRANDLOAD_PRIVATE__: JSON.stringify(isPrivateBuild),
+  __GRANDLOAD_DEBUG__: JSON.stringify(process.env.GRANDLOAD_DEBUG === '1'),
 };
 const releaseVersion = process.env.GRANDLOAD_VERSION ?? '0.2.0';
 
 const commonEntries = {
-  'service-worker': 'src/background/service-worker.ts',
-  content: 'src/content/content.ts',
-  sidepanel: 'src/sidepanel/main.ts',
+  'service-worker': path.resolve('src/background/service-worker.ts'),
+  content: path.resolve('src/content/content.ts'),
+  sidepanel: path.resolve('src/sidepanel/main.ts'),
 };
 
 function makeManifest(browser) {
@@ -48,7 +51,7 @@ async function buildEntry(entry, outfile, target) {
   await build({
     entryPoints: [entry],
     bundle: true,
-    outfile,
+    outfile: path.resolve(outfile),
     format: 'iife',
     target: [target],
     platform: 'browser',
@@ -65,7 +68,7 @@ async function buildVariant(browser, variantDir) {
   const target = isFirefox ? 'firefox128' : 'chrome120';
   const entries = isFirefox
     ? commonEntries
-    : { ...commonEntries, offscreen: 'src/offscreen/offscreen.ts' };
+    : { ...commonEntries, offscreen: path.resolve('src/offscreen/offscreen.ts') };
   fs.mkdirSync(path.join(variantDir, 'icons'), { recursive: true });
   for (const [name, entry] of Object.entries(entries)) {
     await buildEntry(entry, path.join(variantDir, `${name}.js`), target);

@@ -6,6 +6,7 @@ Grandload/
 *.cbz
 *.zip
 dist-preview/
+dist-private/
 release/
 .DS_Store
 coverage/

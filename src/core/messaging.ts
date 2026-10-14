@@ -33,7 +33,7 @@ export interface MessagePayloadMap {
   READ_CHAPTER_META: { adapterId: string };
   READ_PAGE_ASSETS: { pageUrl: string; loadLazy?: boolean };
   STOP_PAGE_ASSETS: Record<string, never>;
-  SCAN_START: { scanId: string; pageUrl: string; loadLazy?: boolean };
+  SCAN_START: { scanId: string; pageUrl: string; loadLazy?: boolean; debug?: boolean };
   SCAN_CANCEL: { scanId: string };
   READ_SERIES: { adapterId: string };
   JOB_CREATE: { kind: 'chapter' | 'series' | 'links'; params: Record<string, unknown> };

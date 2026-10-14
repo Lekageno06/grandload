@@ -1,5 +1,6 @@
 import { registerModule } from '../../core/registry';
-import { listModules } from '../../core/registry';
+import { listAdapters, listModules, getAdapter } from '../../core/registry';
+import { hasHostAccess } from '../../core/permissions';
 import { getPrefs, setPrefs } from '../../core/storage';
 import type { GrandloadModule, ModuleApi, PageContext } from '../../core/types';
 import {
@@ -9,12 +10,14 @@ import {
   isDirectoryPickerCancellation,
 } from '../../destinations/custom-folder';
 
+declare const __GRANDLOAD_PRIVATE__: boolean;
+
 const preferencesModule: GrandloadModule = {
   id: 'preferences',
   title: 'Préférences',
   priority: 10,
   canHandle: () => true, // Toujours disponible
-  mountPanel: (root: HTMLElement, _context: PageContext, api: ModuleApi): void => {
+  mountPanel: (root: HTMLElement, context: PageContext, api: ModuleApi): void => {
     const panel = document.createElement('div');
     panel.className = 'd-grid gap-3';
     root.appendChild(panel);
@@ -209,6 +212,18 @@ const preferencesModule: GrandloadModule = {
     strategyRow.append(strategyLabel, strategySelect);
     panel.appendChild(strategyRow);
 
+    const debugRow = document.createElement('label');
+    debugRow.className = 'form-check form-switch';
+    const debugInput = document.createElement('input');
+    debugInput.type = 'checkbox';
+    debugInput.className = 'form-check-input';
+    debugInput.id = 'pref-debug-logging';
+    const debugLabel = document.createElement('span');
+    debugLabel.className = 'form-check-label small';
+    debugLabel.textContent = 'Activer les journaux de diagnostic (développement uniquement)';
+    debugRow.append(debugInput, debugLabel);
+    panel.appendChild(debugRow);
+
     // 6. Pré-exclusions automatiques
     const autoExcludeRow = document.createElement('div');
     autoExcludeRow.className = 'form-check form-switch';
@@ -237,6 +252,54 @@ const preferencesModule: GrandloadModule = {
     modulesSection.appendChild(modulesList);
     panel.appendChild(modulesSection);
 
+    const diagnosticSection = document.createElement('section');
+    diagnosticSection.className = 'd-grid gap-2 border-top pt-2';
+    const diagnosticHeading = document.createElement('div');
+    diagnosticHeading.className = 'small fw-bold';
+    diagnosticHeading.textContent = 'Diagnostic';
+    const diagnosticButton = document.createElement('button');
+    diagnosticButton.type = 'button';
+    diagnosticButton.className = 'btn btn-outline-secondary btn-sm';
+    diagnosticButton.textContent = 'Copier le diagnostic';
+    const diagnosticOutput = document.createElement('pre');
+    diagnosticOutput.className = 'small text-body-secondary';
+    diagnosticOutput.hidden = true;
+    diagnosticOutput.style.whiteSpace = 'pre-wrap';
+    diagnosticSection.append(diagnosticHeading, diagnosticButton, diagnosticOutput);
+    panel.appendChild(diagnosticSection);
+
+    diagnosticButton.addEventListener('click', () => {
+      void (async () => {
+        const adapter = getAdapter(context.adapterId);
+        const hostAccess = await hasHostAccess(context.url, adapter?.origins?.(new URL(context.url)) ?? []);
+        const modules = listModules().map((module) => {
+          let reason = 'applicable';
+          if (module.id !== 'preferences' && !module.canHandle(context)) reason = 'canHandle faux';
+          else if (module.id !== 'preferences' && prefsSnapshot.modulesEnabled[module.id] === false) reason = 'module désactivé';
+          else if (!hostAccess && module.id !== 'preferences') reason = 'permission d’hôte manquante';
+          return `${module.id}: ${reason}`;
+        });
+        const diagnostic = [
+          `URL: ${context.url}`,
+          `Domaine: ${(() => { try { return new URL(context.url).hostname; } catch { return 'inconnu'; } })()}`,
+          `PageContext: kind=${context.kind}, adapterId=${context.adapterId}`,
+          `Adaptateurs: ${listAdapters().map((item) => item.id).join(', ')}`,
+          `Modules: ${modules.join('; ')}`,
+          `Permissions d’hôte: ${hostAccess ? 'accordées' : 'manquantes'}`,
+          `Build: ${typeof __GRANDLOAD_PRIVATE__ !== 'undefined' && __GRANDLOAD_PRIVATE__ ? 'privé' : 'public'}`,
+          `Version: ${chrome.runtime?.getManifest?.().version ?? 'inconnue'}`,
+        ].join('\n');
+        diagnosticOutput.textContent = diagnostic;
+        diagnosticOutput.hidden = false;
+        try {
+          await navigator.clipboard?.writeText(diagnostic);
+          diagnosticButton.textContent = 'Diagnostic copié';
+        } catch {
+          diagnosticButton.textContent = 'Diagnostic affiché';
+        }
+      })();
+    });
+
     // Bouton de sauvegarde
     const saveButton = document.createElement('button');
     saveButton.type = 'button';
@@ -246,7 +309,13 @@ const preferencesModule: GrandloadModule = {
 
     const moduleToggles: Record<string, HTMLInputElement> = {};
 
+    let prefsSnapshot: Awaited<ReturnType<typeof getPrefs>> = {
+      theme: 'dark', destination: { mode: 'browser', subfolderTemplate: 'Grandload', customFolderName: '' },
+      format: 'cbz', concurrency: 1, requestDelayMs: 1500, modulesEnabled: {}, autoOpenDownloads: false,
+      autoExclude: true, downloadFolder: 'Grandload', acquisitionStrategy: 'auto', debugLogging: false,
+    };
     void getPrefs().then((prefs) => {
+      prefsSnapshot = prefs;
       themeSelect.value = prefs.theme || 'dark';
       formatSelect.value = prefs.format || 'cbz';
       concurrencyInput.value = String(prefs.concurrency || 1);
@@ -263,6 +332,7 @@ const preferencesModule: GrandloadModule = {
         }
       });
       strategySelect.value = prefs.acquisitionStrategy || 'auto';
+      debugInput.checked = prefs.debugLogging === true;
       autoExcludeInput.checked = prefs.autoExclude ?? true;
 
       const allModules = listModules();
@@ -347,6 +417,7 @@ const preferencesModule: GrandloadModule = {
           autoExclude,
           modulesEnabled,
           destination,
+          debugLogging: debugInput.checked,
         });
 
         saveButton.textContent = 'Préférences enregistrées !';

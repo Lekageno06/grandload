@@ -8,7 +8,17 @@ import {
   archiveWarning,
   estimateArchiveBytes,
   getScanStateMessage,
+  isScanStopVisible,
 } from '../src/modules/generic-scan/state';
+
+describe('bouton d’arrêt du scan', () => {
+  it('n’est visible que pendant un scan actif', () => {
+    expect(isScanStopVisible('loading')).toBe(true);
+    for (const state of ['idle', 'results', 'empty', 'error', 'permission'] as const) {
+      expect(isScanStopVisible(state)).toBe(false);
+    }
+  });
+});
 import { genericAdapter } from '../src/adapters/generic';
 import type { ScanItem } from '../src/modules/generic-scan/types';
 import { JSDOM } from 'jsdom';

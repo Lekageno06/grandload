@@ -6,11 +6,14 @@
 - [ ] `npm run lint`
 - [ ] `npm test`
 - [ ] `npm run build`
+- [ ] `npm run build:private` (sortie séparée dans `dist-private/`)
 - [ ] `npm run zip`
 - [ ] Les deux archives de `release/` sont présentes et lisibles.
 - [ ] Aucun test, fixture, document ou sourcemap ne figure dans une archive.
 - [ ] Les icônes 16, 32, 48 et 128 sont présentes dans chaque archive.
 - [ ] La version du manifest est la version de publication attendue.
+- [ ] Le pied du panneau indique correctement « build public » ou « build privé ».
+- [ ] Le build public (`dist/`) ne contient aucun adaptateur privé ; le build privé (`dist-private/`) contient les trois entrées et les profils privés.
 - [ ] Le manifest Chrome se charge dans `chrome://extensions` sans erreur console.
 - [ ] Le manifest Firefox se charge dans `about:debugging` sans erreur console.
 

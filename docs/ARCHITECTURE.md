@@ -86,3 +86,7 @@ Les permissions fixes restent `activeTab`, `scripting`, `downloads`, `storage`, 
 supplémentaire n'est utilisée.
 
 Le code d'interface ne dépend pas de `chrome.sidePanel`; seule l'amorce du Service Worker l'utilise.
+Les builds sont séparés : `npm run build` produit uniquement `dist/` (public), tandis que
+`npm run build:private` produit `dist-private/` et `dist-private/firefox/` avec les profils
+privés. Aucun build de validation privé ne doit écraser `dist/`.
+

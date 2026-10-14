@@ -5,11 +5,15 @@ import type { MessageKind, MessagePayloadMap, MessageResultMap } from '../core/m
 import { readPageAssets } from './dom-reader';
 import { autoScrollUntilStable } from './scroll-loader';
 
+declare const __GRANDLOAD_DEBUG__: boolean;
+
 type ContentRequest = { type: MessageKind; payload: Record<string, unknown> };
 let activeAssetScan: AbortController | undefined;
 let activeScanId: string | undefined;
+let activeScanDebug = false;
 
 function debugScan(message: string, data: Record<string, unknown> = {}): void {
+  if (typeof __GRANDLOAD_DEBUG__ === 'undefined' || !__GRANDLOAD_DEBUG__ || !activeScanDebug) return;
   console.info('[Grandload][debug][scan]', message, data);
 }
 
@@ -39,11 +43,12 @@ function reply(sendResponse: (response: unknown) => void, response: unknown): vo
   }
 }
 
-function startGenericScan(scanId: string, pageUrl: string, loadLazy: boolean): void {
+function startGenericScan(scanId: string, pageUrl: string, loadLazy: boolean, debug: boolean): void {
   activeAssetScan?.abort();
   const controller = new AbortController();
   activeAssetScan = controller;
   activeScanId = scanId;
+  activeScanDebug = debug;
   const startedAt = performance.now();
   debugScan('début du scan', { scanId, loadLazy });
   void (async () => {
@@ -181,12 +186,12 @@ if (!contentGlobal.__grandloadContentReader) {
     }
     if (message.type === 'SCAN_START') {
       try {
-        const payload = message.payload as { scanId?: unknown; pageUrl?: unknown; loadLazy?: unknown };
+        const payload = message.payload as { scanId?: unknown; pageUrl?: unknown; loadLazy?: unknown; debug?: unknown };
         if (typeof payload.scanId !== 'string' || typeof payload.pageUrl !== 'string') {
           throw new Error('Paramètres de scan invalides.');
         }
         reply(sendResponse, { ok: true, data: { scanId: payload.scanId } });
-        startGenericScan(payload.scanId, payload.pageUrl, payload.loadLazy === true);
+        startGenericScan(payload.scanId, payload.pageUrl, payload.loadLazy === true, payload.debug === true);
       } catch (error) {
         debugScan('exception avant réponse SCAN_START', {
           cause: error instanceof Error ? error.message : String(error),

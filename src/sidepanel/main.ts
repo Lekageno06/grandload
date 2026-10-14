@@ -14,6 +14,7 @@ import {
 } from '../destinations/custom-folder';
 
 declare const __BUILD_DATE__: string;
+declare const __GRANDLOAD_PRIVATE__: boolean;
 
 type ActiveTab = chrome.tabs.Tab & { id: number; url: string };
 let refreshSequence = 0;
@@ -38,7 +39,12 @@ function renderBuildInfo(): void {
   const build = node('build-info');
   if (version && chrome.runtime?.getManifest)
     version.textContent = `v${chrome.runtime.getManifest().version}`;
-  if (build) build.textContent = `Build ${new Date(__BUILD_DATE__).toLocaleString('fr-FR')}`;
+  if (build) {
+    const visibility = typeof __GRANDLOAD_PRIVATE__ !== 'undefined' && __GRANDLOAD_PRIVATE__
+      ? 'build privé'
+      : 'build public';
+    build.textContent = `${visibility} · ${new Date(__BUILD_DATE__).toLocaleString('fr-FR')}`;
+  }
 }
 
 function renderJobs(): void {

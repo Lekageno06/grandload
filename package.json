@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "node esbuild.config.mjs --watch",
     "build": "node esbuild.config.mjs",
+    "build:private": "node esbuild.config.mjs --private --outdir=dist-private",
     "preview": "node scripts/preview.mjs",
     "lint": "eslint . --ext .ts",
     "typecheck": "tsc --noEmit",

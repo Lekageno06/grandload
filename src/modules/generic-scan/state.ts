@@ -1,5 +1,9 @@
 export type ScanViewState = 'idle' | 'loading' | 'results' | 'empty' | 'error' | 'permission';
 
+export function isScanStopVisible(state: ScanViewState): boolean {
+  return state === 'loading';
+}
+
 import type { ScanItem } from './types';
 
 export function estimateArchiveBytes(items: readonly ScanItem[]): number {

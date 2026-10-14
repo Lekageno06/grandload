@@ -6,10 +6,12 @@ import type { GalleryItem } from '../../ui/components/gallery';
 import { exportCsv, exportJson, exportTxt } from './exports';
 import { filterScanItems, getTypeCounts } from './filters';
 import type { ScanFilterState, ScanItem } from './types';
-import { archiveWarning, getScanStateMessage, type ScanViewState } from './state';
+import { archiveWarning, getScanStateMessage, isScanStopVisible, type ScanViewState } from './state';
 import { createDestinationPicker } from '../../destinations/picker';
 import { getPrefs } from '../../core/storage';
 import { tabs as createTabs } from '../../ui/components/components';
+
+declare const __GRANDLOAD_DEBUG__: boolean;
 
 const typeOptions = [
   'all',
@@ -39,7 +41,9 @@ export function isCurrentScanEvent(
 
 function injectContentReader(tabId: number): Promise<void> {
   return new Promise<void>((resolve, reject) => {
-    console.info('[Grandload][debug][scan] injection content.js', { tabId, frame: 0 });
+    if (typeof __GRANDLOAD_DEBUG__ !== 'undefined' && __GRANDLOAD_DEBUG__) {
+      console.info('[Grandload][debug][scan] injection content.js', { tabId, frame: 0 });
+    }
     chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] }, () => {
       const error = chrome.runtime.lastError;
       if (error) {
@@ -59,6 +63,7 @@ function scanCurrentPageInTab(
   loadLazy: boolean,
   scanId: string,
   onProgress: (step: number, count: number) => void,
+  debug: boolean,
 ): Promise<ScanEventResult> {
   return new Promise<ScanEventResult>((resolve, reject) => {
     let settled = false;
@@ -92,14 +97,14 @@ function scanCurrentPageInTab(
     void injectContentReader(tabId).then(() => {
       chrome.tabs.sendMessage(
         tabId,
-        { type: 'SCAN_START', payload: { scanId, pageUrl, loadLazy } },
+        { type: 'SCAN_START', payload: { scanId, pageUrl, loadLazy, debug } },
         (response: { ok?: boolean; data?: { scanId?: string }; error?: { message?: string } } | undefined) => {
           const runtimeError = chrome.runtime.lastError;
           if (runtimeError) {
             console.info('[Grandload][debug][scan] fermeture du canal de démarrage', { tabId, scanId, cause: runtimeError.message });
             if (loadLazy && /channel closed|message port closed|returning true/iu.test(runtimeError.message ?? '')) {
               finish(() => {
-                void scanCurrentPageInTab(tabId, pageUrl, false, scanId, onProgress)
+                void scanCurrentPageInTab(tabId, pageUrl, false, scanId, onProgress, debug)
                   .then((result) => resolve({
                     ...result,
                     warning: 'Chargement des images paresseuses interrompu : résultats partiels',
@@ -734,7 +739,7 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
       scanState.className = `ui-scan-state ui-muted mb-0${
         viewState === 'error' || viewState === 'permission' ? ' text-danger' : ''
       }`;
-      stopScanButton.hidden = viewState !== 'loading';
+      stopScanButton.hidden = !isScanStopVisible(viewState);
     };
 
     setScanState('loading');
@@ -746,6 +751,8 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
     const scanId = `scan-${Date.now()}-${sequence}`;
     activeScanId = scanId;
     try {
+      const prefs = await getPrefs();
+      const debug = prefs.debugLogging === true;
       const result = await scanCurrentPageInTab(
         ctx.tabId,
         ctx.url,
@@ -756,6 +763,7 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
             scanState.textContent = `Scan en cours… étape ${step}, ${count} ressource(s) détectée(s).`;
           }
         },
+        debug,
       );
       if (sequence !== loadSequence || activeScanId !== scanId) return;
       const results = result.items;
@@ -817,6 +825,7 @@ function buildPopupCard(root: HTMLElement, ctx: PageContext, api: ModuleApi): vo
     if (activeScanId) {
       chrome.tabs.sendMessage(ctx.tabId, { type: 'SCAN_CANCEL', payload: { scanId: activeScanId } });
       activeScanId = undefined;
+      stopScanButton.hidden = true;
     }
     api.setStatus?.('Arrêt du chargement des images demandé.');
   });

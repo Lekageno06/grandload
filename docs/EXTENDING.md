@@ -2,6 +2,11 @@
 
 Principe : **ajouter une capacité = ajouter un fichier + une ligne d'enregistrement**. Aucune modification de `src/core`.
 
+## Build public et privé
+
+`npm run build` produit le build public dans `dist/`. `npm run build:private` produit le build
+privé dans `dist-private/` et `dist-private/firefox/`, sans variable d’environnement.
+
 ## Ajouter un site (adaptateur)
 1. Créer `src/adapters/<site>.ts` implémentant `SiteAdapter` (voir `SITE_PROFILES.md`).
 2. L'enregistrer dans `src/adapters/index.ts` : `registerAdapter(monSite)`.

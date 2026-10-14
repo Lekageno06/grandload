@@ -9,8 +9,8 @@ registerAdapter(mangasOriginesAdapter);
 export const adaptersReady: Promise<void> =
   typeof __GRANDLOAD_PRIVATE__ !== 'undefined' && __GRANDLOAD_PRIVATE__
     ? import('./private').then(({ hentaiOriginesAdapter, hentaiScantradAdapter }) => {
-    registerAdapter(hentaiOriginesAdapter);
-    registerAdapter(hentaiScantradAdapter);
+        registerAdapter(hentaiOriginesAdapter);
+        registerAdapter(hentaiScantradAdapter);
       })
     : Promise.resolve();
 

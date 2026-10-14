@@ -21,6 +21,8 @@ export interface Prefs {
   downloadFolder: string;
   /** Stratégie d'acquisition : 'auto' (défaut) / 'live-dom' (toujours onglet inactif) / 'html-parse' (toujours sans onglet) (RG-205). */
   acquisitionStrategy: AcquisitionStrategy;
+  /** Active les journaux de diagnostic détaillés en développement. */
+  debugLogging: boolean;
 }
 
 /** Exclusions mémorisées par site (RG-107). Stockées dans exclusions:<adapterId>. */
@@ -122,6 +124,7 @@ export const DEFAULT_PREFS: Prefs = {
   autoExclude: true,
   downloadFolder: 'Grandload',
   acquisitionStrategy: 'auto',
+  debugLogging: false,
 };
 
 type StorageAreaLike = {
