@@ -5,6 +5,7 @@ import { hentaiScantradAdapter } from '../src/adapters/private/hentai-scantrad';
 import { adaptersReady } from '../src/adapters';
 import { listAdapters } from '../src/core/registry';
 import seriesDownloadModule from '../src/modules/series-download';
+import { reconcilePageContext } from '../src/sidepanel/page-context';
 
 describe('intégration des profils privés', () => {
   it.each([
@@ -14,6 +15,22 @@ describe('intégration des profils privés', () => {
     const context = { url, kind: adapter.classify(new URL(url)), adapterId: adapter.id, tabId: 1 };
     expect(context.kind).toBe('series');
     expect(seriesDownloadModule.canHandle(context)).toBe(true);
+  });
+
+  it('classifie exactement le chapitre hentai-origines comme chapitre', () => {
+    const url = 'https://hentai-origines.com/manga/the-father-in-law-fucks-them-all/chapitre-59/';
+    expect(hentaiOriginesAdapter.matches(new URL(url))).toBe(true);
+    expect(hentaiOriginesAdapter.classify(new URL(url))).toBe('chapter');
+  });
+
+  it('réconcilie un contexte générique périmé avec le profil privé chargé dans le panneau', () => {
+    const context = reconcilePageContext({
+      url: 'https://hentai-origines.com/manga/the-father-in-law-fucks-them-all/chapitre-59/',
+      kind: 'other',
+      adapterId: 'generic',
+      tabId: 1,
+    }, [hentaiOriginesAdapter]);
+    expect(context).toMatchObject({ kind: 'chapter', adapterId: 'hentai-origines' });
   });
 
   it('le build public traite ces domaines comme génériques sans lever d’erreur', () => {
