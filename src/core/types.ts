@@ -1,4 +1,10 @@
 export type PageKind = 'chapter' | 'series' | 'other';
+export interface AdapterResolutionDiagnostics {
+  registryReady: boolean;
+  registered: string[];
+  matches: Array<{ id: string; matched: boolean }>;
+  selected: string | null;
+}
 export type JobState =
   'queued' | 'running' | 'paused' | 'needs-permission' | 'done' | 'failed' | 'ignored' | 'cancelled';
 
@@ -7,6 +13,7 @@ export interface PageContext {
   kind: PageKind;
   adapterId: string;
   tabId: number;
+  serviceWorkerDiagnostics?: AdapterResolutionDiagnostics;
 }
 
 export interface ChapterMeta {

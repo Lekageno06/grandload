@@ -1,4 +1,4 @@
-import type { GrandloadModule, Packager, SiteAdapter } from './types';
+import type { AdapterResolutionDiagnostics, GrandloadModule, Packager, SiteAdapter } from './types';
 
 const modules = new Map<string, GrandloadModule>();
 const adapters = new Map<string, SiteAdapter>();
@@ -22,8 +22,33 @@ export function registerAdapter(adapter: SiteAdapter): SiteAdapter {
   return adapter;
 }
 
-export function getAdapter(adapterId: string): SiteAdapter | undefined {
-  return adapters.get(adapterId);
+export function getAdapter(
+  adapterOrUrl: string | URL,
+  diagnostics?: AdapterResolutionDiagnostics,
+): SiteAdapter | undefined {
+  if (typeof adapterOrUrl === 'string') return adapters.get(adapterOrUrl);
+
+  const registered = listAdapters();
+  const ordered = [
+    ...registered.filter((adapter) => adapter.id !== 'generic'),
+    ...registered.filter((adapter) => adapter.id === 'generic'),
+  ];
+  const matches = ordered.map((adapter) => {
+    let matched = false;
+    try {
+      matched = adapter.matches(adapterOrUrl);
+    } catch {
+      matched = false;
+    }
+    return { id: adapter.id, matched };
+  });
+  const selected = ordered.find((adapter, index) => matches[index]?.matched);
+  if (diagnostics) {
+    diagnostics.registered = registered.map((adapter) => adapter.id);
+    diagnostics.matches = matches;
+    diagnostics.selected = selected?.id ?? null;
+  }
+  return selected;
 }
 
 export function listAdapters(): SiteAdapter[] {

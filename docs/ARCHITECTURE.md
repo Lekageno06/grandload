@@ -40,6 +40,15 @@ tests/                Tests unitaires et fixtures DOM
 Il n'existe plus de `src/popup/`. La collecte DOM est centralisée dans `src/content/dom-reader.ts`
 et les adaptateurs ; aucun module ne collecte directement les images.
 
+### Résolution du contexte et réveil du Worker
+
+`src/core/registry.ts` expose l'unique `getAdapter`, utilisé par le Service Worker, le Side Panel
+et le content script. Pour une URL, il évalue toujours les adaptateurs spécifiques avant `generic`;
+les résultats de `matches()` et l'adaptateur retenu sont inclus dans `PageContext` pour le diagnostic.
+Le Service Worker attend `adaptersReady` avant de traiter ses messages afin qu'un réveil MV3 à froid
+ne réponde pas avec un registre incomplet. Le panneau ne corrige plus localement un contexte reçu :
+toute divergence SW/panneau est signalée explicitement dans le diagnostic.
+
 ## Messages principaux
 
 | Message | Sens | Fonction |

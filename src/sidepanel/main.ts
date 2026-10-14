@@ -7,7 +7,6 @@ import { getJobs, getPrefs } from '../core/storage';
 import type { Job, PageContext } from '../core/types';
 import { formatJobLabel } from './job-labels';
 import { getVisibleModules } from './module-visibility';
-import { reconcilePageContext } from './page-context';
 import { icon } from '../ui/icons';
 import {
   chooseAndStoreCustomFolder,
@@ -296,7 +295,7 @@ async function initializePanel(): Promise<void> {
     showPermissionMessage(tab);
     return;
   }
-  const context = reconcilePageContext(response.data as PageContext);
+  const context = response.data as PageContext;
   if (!context.url) {
     showPermissionMessage(tab);
     setStatus('Le domaine est connu, mais le contexte n’est pas encore accessible.');

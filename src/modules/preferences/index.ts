@@ -271,6 +271,9 @@ const preferencesModule: GrandloadModule = {
     diagnosticButton.addEventListener('click', () => {
       void (async () => {
         const adapter = getAdapter(context.adapterId);
+        const panelAdapter = (() => {
+          try { return getAdapter(new URL(context.url)); } catch { return undefined; }
+        })();
         const hostAccess = await hasHostAccess(context.url, adapter?.origins?.(new URL(context.url)) ?? []);
         const modules = listModules().map((module) => {
           let reason = 'applicable';
@@ -286,6 +289,10 @@ const preferencesModule: GrandloadModule = {
           `Adaptateurs: ${listAdapters().map((item) => item.id).join(', ')}`,
           `Modules: ${modules.join('; ')}`,
           `Permissions d’hôte: ${hostAccess ? 'accordées' : 'manquantes'}`,
+          `Adaptateurs vus par le Service Worker: ${context.serviceWorkerDiagnostics?.registered.join(', ') ?? 'non disponible'}`,
+          `Résolution SW: ${context.serviceWorkerDiagnostics?.matches.map((item) => `${item.id}=${item.matched ? 'match' : 'non'}`).join(', ') ?? 'non disponible'} → ${context.serviceWorkerDiagnostics?.selected ?? context.adapterId}`,
+          `Écart SW / panneau: ${panelAdapter?.id === context.adapterId ? 'aucun' : `SW=${context.adapterId}, panneau=${panelAdapter?.id ?? 'inconnu'}`}`,
+          `Registre privé prêt dans le SW: ${context.serviceWorkerDiagnostics?.registryReady === true ? 'oui' : 'non/inconnu'}`,
           `Build: ${typeof __GRANDLOAD_PRIVATE__ !== 'undefined' && __GRANDLOAD_PRIVATE__ ? 'privé' : 'public'}`,
           `Version: ${chrome.runtime?.getManifest?.().version ?? 'inconnue'}`,
         ].join('\n');

@@ -174,10 +174,12 @@ async function handleContentRequest<
 
 const contentGlobal = globalThis as typeof globalThis & { __grandloadContentReader?: boolean };
 const existingListenerCount = contentGlobal.__grandloadContentReader ? 1 : 0;
-debugScan('injection de content.js', {
-  listenersAlreadyPresent: existingListenerCount,
-  frame: 0,
-});
+if (typeof __GRANDLOAD_DEBUG__ !== 'undefined' && __GRANDLOAD_DEBUG__) {
+  console.info('[Grandload][debug][scan] injection de content.js', {
+    listenersAlreadyPresent: existingListenerCount,
+    frame: 0,
+  });
+}
 if (!contentGlobal.__grandloadContentReader) {
   contentGlobal.__grandloadContentReader = true;
   chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {

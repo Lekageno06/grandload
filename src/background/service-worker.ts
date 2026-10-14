@@ -1,8 +1,7 @@
 import { adaptersReady } from '../adapters';
 import '../modules';
 import { sanitizeFileName, getBaseNameFromUrl } from '../shared/url-utils';
-import { listAdapters } from '../core/registry';
-import type { PageContext } from '../core/types';
+import { resolvePageContext } from './page-context';
 import { suggestRequestedDownloadName } from './download-filenames';
 import { getPrefs } from '../core/storage';
 import '../destinations/browser';
@@ -110,6 +109,8 @@ chrome.runtime.onInstalled.addListener(() => {
   console.info('Grandload installed.');
 });
 
+const registryReady = adaptersReady.then(() => undefined);
+
 void Promise.resolve()
   .then(recoverSeriesJobs)
   .then(recoverRunningJobs)
@@ -117,26 +118,46 @@ void Promise.resolve()
     console.error('Impossible de reprendre les jobs interrompus.', error);
   });
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (!message || typeof message !== 'object' || !('type' in message)) {
-    sendResponse({ ok: true, data: { ready: true } });
-    return false;
-  }
-
-  const type = message.type;
-
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  const messageType =
+    message && typeof message === 'object' && 'type' in message
+      ? (message as { type?: unknown }).type
+      : undefined;
   if (
-    type === 'BUILD_ARCHIVE' ||
-    type === 'CANCEL_ARCHIVE' ||
-    type === 'REVOKE_BLOBS' ||
-    type === 'WRITE_CUSTOM_FILES' ||
-    type === 'JOB_UPDATE'
+    messageType === 'BUILD_ARCHIVE' ||
+    messageType === 'CANCEL_ARCHIVE' ||
+    messageType === 'REVOKE_BLOBS' ||
+    messageType === 'WRITE_CUSTOM_FILES' ||
+    messageType === 'JOB_UPDATE'
   ) {
     return false;
   }
+  void registryReady
+    .then(() => handleServiceWorkerMessage(message, sender, sendResponse))
+    .catch((error: unknown) => {
+      sendResponse({
+        ok: false,
+        error: { code: 'ADAPTER_STRUCTURE', message: error instanceof Error ? error.message : 'Le registre des adaptateurs est indisponible.' },
+      });
+    });
+  return true;
+});
+
+function handleServiceWorkerMessage(
+  message: unknown,
+  _sender: chrome.runtime.MessageSender,
+  sendResponse: (response: unknown) => void,
+): void {
+  if (!message || typeof message !== 'object' || !('type' in message)) {
+    sendResponse({ ok: true, data: { ready: true } });
+    return;
+  }
+
+  const typedMessage = message as { type: string; payload?: unknown };
+  const type = typedMessage.type;
 
   if (type === 'ARCHIVE_PROGRESS') {
-    const payload = message.payload as { jobId: string; done: number; total: number };
+    const payload = typedMessage.payload as { jobId: string; done: number; total: number };
     void handleArchiveProgress(payload)
       .then(() => sendResponse({ ok: true, data: undefined }))
       .catch((error: unknown) => {
@@ -146,54 +167,31 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           error: { code: 'STORAGE_WRITE_FAILED', message: 'Progression non enregistrée.' },
         });
       });
-    return true;
+    return;
   }
 
   if (type === 'PAGE_CONTEXT') {
-    const payload = message.payload as { tabId: number };
+    const payload = typedMessage.payload as { tabId: number };
 
-    void adaptersReady.then(() => new Promise<void>((resolve) => {
+    void new Promise<void>((resolve, reject) => {
       chrome.tabs.get(payload.tabId, (tab) => {
-      const url = tab?.url ?? '';
-      const foundAdapter =
-        listAdapters().find((adapter) => {
-          try {
-            return adapter.matches(new URL(url));
-          } catch {
-            return false;
-          }
-        }) ?? listAdapters().find((adapter) => adapter.id === 'generic');
-
-      const kind = (() => {
-        try {
-          return foundAdapter ? foundAdapter.classify(new URL(url)) : 'other';
-        } catch {
-          return 'other';
-        }
-      })();
-
-      const context: PageContext = {
-        url,
-        kind,
-        adapterId: foundAdapter?.id ?? 'generic',
-        tabId: payload.tabId,
-      };
-
-        sendResponse({ ok: true, data: context });
-        resolve();
+        const url = tab?.url ?? '';
+        void resolvePageContext(payload.tabId, url, registryReady)
+          .then((context) => { sendResponse({ ok: true, data: context }); resolve(); })
+          .catch(reject);
       });
-    })).catch((error: unknown) => {
+    }).catch((error: unknown) => {
       sendResponse({
         ok: false,
         error: { code: 'ADAPTER_STRUCTURE', message: error instanceof Error ? error.message : 'Les adaptateurs ne sont pas prêts.' },
       });
     });
 
-    return true;
+    return;
   }
 
   if (type === 'JOB_CREATE') {
-    const payload = message.payload as { kind: string; params?: { items?: DownloadItem[] } };
+    const payload = typedMessage.payload as { kind: string; params?: { items?: DownloadItem[] } };
 
     if (payload.kind === 'chapter' && payload.params) {
       void createChapterJob(payload.params as Record<string, unknown>)
@@ -203,7 +201,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             error instanceof Error ? error.message : 'Création du chapitre impossible.';
           sendResponse({ ok: false, error: { code: 'ADAPTER_STRUCTURE', message: messageText } });
         });
-      return true;
+      return;
     }
 
     if (payload.kind === 'series' && payload.params) {
@@ -214,7 +212,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             error instanceof Error ? error.message : 'Création de la série impossible.';
           sendResponse({ ok: false, error: { code: 'ADAPTER_STRUCTURE', message: messageText } });
         });
-      return true;
+      return;
     }
 
     if (
@@ -237,12 +235,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         console.error('Impossible de planifier les liens.', error);
       });
       sendResponse({ ok: true, data: { jobId } });
-      return true;
+      return;
     }
   }
 
   if (type === 'JOB_CONTROL') {
-    const payload = message.payload as {
+    const payload = typedMessage.payload as {
       jobId: string;
       action: 'pause' | 'resume' | 'cancel' | 'retry';
     };
@@ -262,9 +260,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           error: { code: 'UNKNOWN', message: 'Contrôle du job impossible.' },
         });
       });
-    return true;
+    return;
   }
 
   sendResponse({ ok: true, data: { ready: true } });
-  return false;
-});
+  return;
+}
